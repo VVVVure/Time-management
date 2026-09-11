@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from './types';
-import { buildDateWindow, groupByTimeOfDay, loadDotsForDate, tasksForDate } from './utils';
+import {
+  buildDateWindow,
+  groupByTimeOfDay,
+  loadDotsForDate,
+  resolvePreviewDeadline,
+  tasksForDate,
+} from './utils';
 
 function makeTask(overrides: Partial<Task> = {}): Task {
   return {
@@ -62,6 +68,24 @@ describe('groupByTimeOfDay', () => {
 
   it('没有任务时返回空数组', () => {
     expect(groupByTimeOfDay([])).toEqual([]);
+  });
+});
+
+describe('resolvePreviewDeadline', () => {
+  it('有日期时保留原日期', () => {
+    expect(resolvePreviewDeadline('2026-09-12', { freq: 'daily', interval: 1, endDate: null })).toBe(
+      '2026-09-12',
+    );
+  });
+
+  it('无日期但有重复规则时兜底为今天', () => {
+    expect(resolvePreviewDeadline('', { freq: 'daily', interval: 1, endDate: null })).toMatch(
+      /^\d{4}-\d{2}-\d{2}$/,
+    );
+  });
+
+  it('无日期也无重复规则时返回 null', () => {
+    expect(resolvePreviewDeadline('', null)).toBeNull();
   });
 });
 

@@ -1,4 +1,4 @@
-import type { Step, Task } from './types';
+import type { RecurrenceRule, Step, Task } from './types';
 
 /** 今天的本地日期 "YYYY-MM-DD" */
 export function todayISO(): string {
@@ -30,6 +30,16 @@ export function postpone15Deadline(): string {
   const now = new Date();
   const nearMidnight = now.getHours() === 23 && now.getMinutes() >= 45;
   return nearMidnight ? tomorrowISO() : todayISO();
+}
+
+/** 预览保存时：有重复规则但没设日期，兜底从今天开始 */
+export function resolvePreviewDeadline(
+  deadline: string,
+  recurrence: RecurrenceRule | null,
+): string | null {
+  if (deadline) return deadline;
+  if (recurrence) return todayISO();
+  return null;
 }
 
 /** 触发一次轻震动（不支持时静默忽略，不报错） */
