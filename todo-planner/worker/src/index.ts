@@ -32,7 +32,8 @@ const SYSTEM_PROMPT = `你是一个时间规划助手，负责把用户输入整
 8. 精力消耗。给每个步骤判断精力消耗并填 energy：需要深度思考/创造性投入的（如"写结论""分析数据"）填 high；机械性/体力性的简单动作（如"倒垃圾""发一封确认邮件""打电话约时间"）填 low；不确定的填 null。
 9. 优先级。用户明确表达紧急或重要时填 high，明确说不急时填 low，其他情况一律 medium。
 10. 信息太模糊时不要猜（例如"搞一下那个东西"）。此时不返回任务，改为返回一个追问问题。
-11. 只通过调用工具返回结果，不要输出任何其他文字。`;
+11. 重复规则识别。如果用户明确说了"每天""每周""每两周""每三天""每月"这类重复说法，把规则填到 recurrence（freq + interval，如"每三天"是 freq=daily, interval=3）。如果同时说了重复截止（"每天吃药，吃两周""重复到月底"），尽量换算成 endDate（YYYY-MM-DD）；没说明确截止就是 null（一直重复）。只支持 daily/weekly/monthly 三种频率，且都是"从某天开始按固定间隔重复"。像"每个工作日""每周二和周四""每年"这类更复杂或不支持的重复模式，recurrence 必须填 null，不要用 daily 或 weekly 强行近似。此时直接忽略重复信息，按普通一次性任务创建（例如"每个工作日去健身房"就创建"去健身房"这个普通任务，recurrence 填 null），不要因为重复模式不支持就去追问。没有明确重复意图的普通一次性任务，recurrence 一律填 null，不要过度联想（如"明天交报告"不代表以后每天都要交报告）。
+12. 只通过调用工具返回结果，不要输出任何其他文字。`;
 
 function json(data: unknown, status: number, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -162,6 +163,19 @@ const decomposeTool = {
                 '具体时间点 HH:MM（24 小时制），如提到"11点15分""下午3点"这类就填，没提到就是 null',
             },
             priority: { type: 'string', enum: ['high', 'medium', 'low'] },
+            recurrence: {
+              type: ['object', 'null'],
+              description:
+                '重复规则，只有用户明确说了"每天""每周""每两周""每月"这类重复说法才填，没提到重复就是 null',
+              properties: {
+                freq: { type: 'string', enum: ['daily', 'weekly', 'monthly'] },
+                interval: { type: 'number', description: '间隔，比如每两周是 freq=weekly, interval=2' },
+                endDate: {
+                  type: ['string', 'null'],
+                  description: '重复到哪天为止，YYYY-MM-DD，没提到就是 null（一直重复）',
+                },
+              },
+            },
             steps: {
               type: 'array',
               items: {
@@ -180,7 +194,7 @@ const decomposeTool = {
               },
             },
           },
-          required: ['title', 'deadline', 'time', 'priority', 'steps'],
+          required: ['title', 'deadline', 'time', 'priority', 'recurrence', 'steps'],
         },
       },
     },
@@ -216,12 +230,33 @@ interface NormalizedStep {
   energy: 'high' | 'low' | null;
 }
 
+interface NormalizedRecurrence {
+  freq: 'daily' | 'weekly' | 'monthly';
+  interval: number;
+  endDate: string | null;
+}
+
 interface NormalizedTask {
   title: string;
   deadline: string | null;
   time: string | null;
   priority: 'high' | 'medium' | 'low';
+  recurrence: NormalizedRecurrence | null;
   steps: NormalizedStep[];
+}
+
+function normalizeRecurrence(value: unknown): NormalizedRecurrence | null {
+  const r = value as { freq?: unknown; interval?: unknown; endDate?: unknown };
+  if (!r || typeof r !== 'object') return null;
+  const freq =
+    r.freq === 'daily' || r.freq === 'weekly' || r.freq === 'monthly' ? r.freq : null;
+  if (!freq) return null;
+  const intervalNum = Number(r.interval);
+  const interval =
+    Number.isFinite(intervalNum) && intervalNum >= 1 ? Math.max(1, Math.round(intervalNum)) : 1;
+  const endDate =
+    typeof r.endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.endDate) ? r.endDate : null;
+  return { freq, interval, endDate };
 }
 
 function normalizeStep(value: unknown): NormalizedStep | null {
@@ -250,6 +285,7 @@ export function normalizeDecompose(input: unknown): {
         deadline?: unknown;
         time?: unknown;
         priority?: unknown;
+        recurrence?: unknown;
         steps?: unknown;
       };
       if (!task || typeof task !== 'object') return null;
@@ -265,6 +301,7 @@ export function normalizeDecompose(input: unknown): {
         task.priority === 'high' || task.priority === 'medium' || task.priority === 'low'
           ? task.priority
           : 'medium';
+      const recurrence = normalizeRecurrence(task.recurrence);
       const normalizedSteps = (Array.isArray(task.steps) ? task.steps : [])
         .map(normalizeStep)
         .filter((s): s is NormalizedStep => s !== null);
@@ -273,7 +310,7 @@ export function normalizeDecompose(input: unknown): {
         normalizedSteps.length > 0
           ? normalizedSteps
           : [{ title, estimatedMinutes: 15, energy: null }];
-      return { title, deadline, time, priority, steps };
+      return { title, deadline, time, priority, recurrence, steps };
     })
     .filter((t): t is NormalizedTask => t !== null);
 
