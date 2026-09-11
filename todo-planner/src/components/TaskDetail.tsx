@@ -30,6 +30,7 @@ interface Props {
   task: Task;
   onBack: () => void;
   onChanged: () => Promise<void>;
+  onChangedWithSync?: () => Promise<void>;
 }
 
 const PRIORITY_LABELS: Record<Priority, string> = {
@@ -54,7 +55,7 @@ function recurrenceLabel(rule: RecurrenceRule | null): string {
   return `每 ${rule.interval} ${unit}`;
 }
 
-function TaskDetail({ task, onBack, onChanged }: Props) {
+function TaskDetail({ task, onBack, onChanged, onChangedWithSync }: Props) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(task.title);
   const [editingDeadline, setEditingDeadline] = useState(false);
@@ -160,7 +161,11 @@ function TaskDetail({ task, onBack, onChanged }: Props) {
       : null;
     await applyRecurrence(task, rule);
     setEditingRecurrence(false);
-    await onChanged();
+    if (onChangedWithSync) {
+      await onChangedWithSync();
+    } else {
+      await onChanged();
+    }
   };
 
   const handlePostpone15 = async () => {
@@ -298,6 +303,8 @@ function TaskDetail({ task, onBack, onChanged }: Props) {
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {isInstance ? (
           <p className="text-[13px] text-gray-400">🔁 这是重复系列中的一次，去根任务修改规则</p>
+        ) : !task.deadline ? (
+          <p className="text-[13px] text-gray-400">🔁 请先设置截止日期，才能设置重复</p>
         ) : (
           <button
             type="button"

@@ -57,6 +57,12 @@ function App() {
     setTasks(await listTasks());
   }, []);
 
+  const refreshWithSync = useCallback(async () => {
+    const loaded = await listTasks();
+    await syncRecurrenceInstances(loaded);
+    setTasks(await listTasks());
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -320,6 +326,7 @@ function App() {
           task={task}
           onBack={() => setView({ name: 'home' })}
           onChanged={refresh}
+          onChangedWithSync={refreshWithSync}
         />
       );
     }
