@@ -104,7 +104,9 @@ export async function downloadBackup(): Promise<void> {
     a.click();
     a.remove();
   } finally {
-    URL.revokeObjectURL(url);
+    // iOS Safari 的已知坑：click 之后立刻 revoke 可能让下载还没真正触发就失效。
+    // 延迟 1500ms 再撤销，确保下载已经开始。
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 }
 
