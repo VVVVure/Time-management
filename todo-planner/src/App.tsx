@@ -1,30 +1,31 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Calendar, CalendarDays, Crosshair } from 'lucide-react';
 import DateStrip from './components/DateStrip';
 import DayView from './components/DayView';
 import MonthView from './components/MonthView';
-import DecomposePreview, { type PreviewTask } from './components/DecomposePreview';
+import DecomposePreview from './components/DecomposePreview';
 import FocusView from './components/FocusView';
 import InputBar from './components/InputBar';
 import SettingsPage from './components/SettingsPage';
 import TaskDetail from './components/TaskDetail';
 import TaskList from './components/TaskList';
-import { addTasks, getSettings, listTasks, updateTask } from './db';
-import { callDecompose, type DecomposeErrorKind, type DecomposeTask } from './decompose';
-import { syncRecurrenceInstances } from './recurrence';
+import { addTasks, updateTask } from './db';
 import { resplitStep } from './refine';
-import type { Task } from './types';
+import {
+  brainDumpTasksOf,
+  focusScopeTasksOf,
+  lowEnergyTasksOf,
+  overdueTasksOf,
+} from './taskSelectors';
+import { useDecomposeFlow } from './useDecomposeFlow';
+import { useTasks } from './useTasks';
 import {
   buildDateWindow,
-  daysUntil,
-  isFocusRelevant,
   loadDotsForDate,
   postpone15Deadline,
-  resolvePreviewDeadline,
   tasksForDate,
   todayISO,
   tomorrowISO,
-  weekdayCN,
 } from './utils';
 
 type View =
@@ -32,22 +33,12 @@ type View =
   | { name: 'detail'; taskId: string }
   | { name: 'settings' };
 
-type DecomposeFlow =
-  | { status: 'loading'; text: string; updateTaskId?: string }
-  | { status: 'preview'; text: string; tasks: DecomposeTask[]; updateTaskId?: string }
-  | { status: 'question'; text: string; question: string; updateTaskId?: string }
-  | {
-      status: 'error';
-      text: string;
-      errorKind: DecomposeErrorKind | 'no-password';
-      message: string;
-      updateTaskId?: string;
-    };
-
 function App() {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const { tasks, refresh, refreshWithSync } = useTasks();
+  const { flow, closeFlow, handleSend, saveDirect, confirmPreview, decomposeBrainDump, retry } =
+    useDecomposeFlow({ tasks, refresh, refreshWithSync });
+
   const [view, setView] = useState<View>({ name: 'home' });
-  const [flow, setFlow] = useState<DecomposeFlow | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [showBrainDump, setShowBrainDump] = useState(false);
   const [energyFilter, setEnergyFilter] = useState(false);
@@ -55,47 +46,11 @@ function App() {
   const [homeMode, setHomeMode] = useState<'focus' | 'date' | 'month'>('focus');
   const [selectedDate, setSelectedDate] = useState(() => todayISO());
 
-  const refresh = useCallback(async () => {
-    setTasks(await listTasks());
-  }, []);
-
-  const refreshWithSync = useCallback(async () => {
-    const loaded = await listTasks();
-    try {
-      await syncRecurrenceInstances(loaded);
-    } catch {
-      // 同步失败不阻塞刷新
-    }
-    setTasks(await listTasks());
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const loaded = await listTasks();
-      if (cancelled) return;
-      try {
-        await syncRecurrenceInstances(loaded);
-      } catch {
-        // 同步失败不阻塞任务加载
-      }
-      if (!cancelled) setTasks(await listTasks());
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const normalTasks = tasks.filter((t) => !t.isBrainDump);
-  const brainDumpTasks = tasks.filter((t) => t.isBrainDump);
-  const focusScopeTasks = normalTasks.filter(isFocusRelevant);
-  const lowEnergyTasks = focusScopeTasks.filter((t) =>
-    t.steps.some((s) => !s.done && s.energy === 'low'),
-  );
+  const focusScopeTasks = focusScopeTasksOf(tasks);
+  const lowEnergyTasks = lowEnergyTasksOf(tasks);
+  const overdueTasks = overdueTasksOf(tasks);
+  const brainDumpTasks = brainDumpTasksOf(tasks);
   const visibleTasks = energyFilter ? lowEnergyTasks : focusScopeTasks;
-  const overdueTasks = normalTasks.filter(
-    (t) => t.status !== 'done' && t.deadline && daysUntil(t.deadline) < 0,
-  );
   const days = useMemo(() => buildDateWindow(), []);
   const dayTasks = tasksForDate(tasks, selectedDate);
   const isTodaySelected = selectedDate === todayISO();
@@ -137,50 +92,6 @@ function App() {
     }
   };
 
-  const runDecompose = async (text: string, updateTaskId?: string) => {
-    if (flow?.status === 'loading') return;
-    setFlow({ status: 'loading', text, updateTaskId });
-
-    const settings = await getSettings();
-    if (!settings.appPassword) {
-      setFlow({
-        status: 'error',
-        text,
-        errorKind: 'no-password',
-        message: '还没有设置 App 密码，请先到设置页填写',
-        updateTaskId,
-      });
-      return;
-    }
-
-    const outcome = await callDecompose({
-      input: text,
-      password: settings.appPassword,
-      maxMinutesPerStep: settings.maxMinutesPerStep,
-      today: todayISO(),
-      weekday: weekdayCN(),
-    });
-
-    if (outcome.kind === 'error') {
-      setFlow({
-        status: 'error',
-        text,
-        errorKind: outcome.errorKind,
-        message: outcome.message,
-        updateTaskId,
-      });
-      return;
-    }
-
-    if (outcome.result.kind === 'question') {
-      setFlow({ status: 'question', text, question: outcome.result.question, updateTaskId });
-    } else {
-      setFlow({ status: 'preview', text, tasks: outcome.result.tasks, updateTaskId });
-    }
-  };
-
-  const handleSend = (text: string) => runDecompose(text);
-
   const handleBrainDump = async (text: string) => {
     const now = new Date().toISOString();
     await addTasks([
@@ -203,122 +114,9 @@ function App() {
     await refresh();
   };
 
-  const saveDirect = async (text: string, updateTaskId?: string) => {
-    if (updateTaskId) {
-      const existing = tasks.find((x) => x.id === updateTaskId);
-      if (existing) {
-        await updateTask({
-          ...existing,
-          title: text,
-          rawInput: text,
-          deadline: null,
-          time: null,
-          priority: 'medium',
-          steps: [],
-          isBrainDump: false,
-        });
-        await refresh();
-        setFlow(null);
-        return;
-      }
-    }
-
-    const now = new Date().toISOString();
-    await addTasks([
-      {
-        id: crypto.randomUUID(),
-        title: text,
-        rawInput: text,
-        deadline: null,
-        time: null,
-        priority: 'medium',
-        status: 'todo',
-        steps: [],
-        isBrainDump: false,
-        recurrence: null,
-        recurrenceRootId: null,
-        createdAt: now,
-        updatedAt: now,
-      },
-    ]);
-    await refresh();
-    setFlow(null);
-  };
-
-  const confirmPreview = async (previewTasks: PreviewTask[], updateTaskId?: string) => {
-    if (!flow || flow.status !== 'preview') return;
-    const now = new Date().toISOString();
-    const hasRecurrence = previewTasks.some((pt) => pt.recurrence != null);
-    const reloadAfterSave = async () => {
-      if (hasRecurrence) {
-        await refreshWithSync();
-      } else {
-        await refresh();
-      }
-    };
-
-    const buildTask = (pt: PreviewTask, id: string): Task => ({
-      id,
-      title: pt.title,
-      rawInput: flow.text,
-      deadline: resolvePreviewDeadline(pt.deadline, pt.recurrence),
-      time: pt.time || null,
-      priority: pt.priority,
-      status: 'todo',
-      steps: pt.steps.map((s, i) => ({
-        id: crypto.randomUUID(),
-        title: s.title,
-        estimatedMinutes: s.estimatedMinutes,
-        done: false,
-        doneAt: null,
-        order: i,
-        energy: s.energy ?? null,
-      })),
-      isBrainDump: false,
-      recurrence: pt.recurrence ?? null,
-      recurrenceRootId: null,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    if (updateTaskId) {
-      const existing = tasks.find((x) => x.id === updateTaskId);
-      if (existing) {
-        const [first, ...rest] = previewTasks;
-        if (first) {
-          await updateTask({
-            ...existing,
-            ...buildTask(first, existing.id),
-            createdAt: existing.createdAt,
-          });
-        }
-        if (rest.length > 0) {
-          await addTasks(rest.map((pt) => buildTask(pt, crypto.randomUUID())));
-        }
-        await reloadAfterSave();
-        setFlow(null);
-        return;
-      }
-    }
-
-    await addTasks(previewTasks.map((pt) => buildTask(pt, crypto.randomUUID())));
-    await reloadAfterSave();
-    setFlow(null);
-  };
-
-  const decomposeBrainDump = (taskId: string) => {
-    const t = brainDumpTasks.find((x) => x.id === taskId);
-    if (!t) return;
-    void runDecompose(t.rawInput, taskId);
-  };
-
   const goSettings = () => {
-    setFlow(null);
+    closeFlow();
     setView({ name: 'settings' });
-  };
-
-  const retry = () => {
-    if (flow && 'text' in flow) void runDecompose(flow.text, flow.updateTaskId);
   };
 
   let content: ReactNode;
@@ -556,7 +354,7 @@ function App() {
           rawInput={flow.text}
           tasks={flow.tasks}
           onConfirm={(previewTasks) => confirmPreview(previewTasks, flow.updateTaskId)}
-          onCancel={() => setFlow(null)}
+          onCancel={closeFlow}
         />
       )}
 
@@ -568,7 +366,7 @@ function App() {
             <div className="mt-4 flex gap-3">
               <button
                 type="button"
-                onClick={() => setFlow(null)}
+                onClick={closeFlow}
                 className="flex-1 rounded-xl bg-gray-100 py-2.5 text-gray-700"
               >
                 返回
