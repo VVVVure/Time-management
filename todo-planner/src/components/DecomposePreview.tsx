@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { DecomposeTask } from '../decompose';
-import type { Priority } from '../types';
+import type { Priority, RecurrenceRule } from '../types';
+import RecurrencePicker from './RecurrencePicker';
 
 export interface PreviewStep {
   key: string;
@@ -15,6 +16,7 @@ export interface PreviewTask {
   deadline: string;
   time: string;
   priority: Priority;
+  recurrence: RecurrenceRule | null;
   steps: PreviewStep[];
 }
 
@@ -38,6 +40,7 @@ function toPreview(tasks: DecomposeTask[]): PreviewTask[] {
     deadline: t.deadline ?? '',
     time: t.time ?? '',
     priority: t.priority,
+    recurrence: t.recurrence ?? null,
     steps: t.steps.map((s) => ({
       key: crypto.randomUUID(),
       title: s.title,
@@ -190,6 +193,16 @@ function DecomposePreview({ rawInput, tasks, onConfirm, onCancel }: Props) {
                       {p.label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              <div className="mt-2">
+                <span className="text-xs text-gray-400">🔁 重复</span>
+                <div className="mt-1">
+                  <RecurrencePicker
+                    value={task.recurrence}
+                    onChange={(r) => patchTask(task.key, { recurrence: r })}
+                  />
                 </div>
               </div>
 

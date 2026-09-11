@@ -237,6 +237,14 @@ function App() {
   const confirmPreview = async (previewTasks: PreviewTask[], updateTaskId?: string) => {
     if (!flow || flow.status !== 'preview') return;
     const now = new Date().toISOString();
+    const hasRecurrence = previewTasks.some((pt) => pt.recurrence != null);
+    const reloadAfterSave = async () => {
+      if (hasRecurrence) {
+        await refreshWithSync();
+      } else {
+        await refresh();
+      }
+    };
 
     const buildTask = (pt: PreviewTask, id: string): Task => ({
       id,
@@ -256,7 +264,7 @@ function App() {
         energy: s.energy ?? null,
       })),
       isBrainDump: false,
-      recurrence: null,
+      recurrence: pt.recurrence ?? null,
       recurrenceRootId: null,
       createdAt: now,
       updatedAt: now,
@@ -276,14 +284,14 @@ function App() {
         if (rest.length > 0) {
           await addTasks(rest.map((pt) => buildTask(pt, crypto.randomUUID())));
         }
-        await refresh();
+        await reloadAfterSave();
         setFlow(null);
         return;
       }
     }
 
     await addTasks(previewTasks.map((pt) => buildTask(pt, crypto.randomUUID())));
-    await refresh();
+    await reloadAfterSave();
     setFlow(null);
   };
 

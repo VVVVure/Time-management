@@ -6,6 +6,15 @@ const stepSchema = z.object({
   energy: z.enum(['high', 'low']).nullable(),
 });
 
+const recurrenceSchema = z.object({
+  freq: z.enum(['daily', 'weekly', 'monthly']),
+  interval: z.number().int().positive(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable(),
+});
+
 const taskSchema = z.object({
   title: z.string().min(1),
   deadline: z
@@ -17,6 +26,7 @@ const taskSchema = z.object({
     .regex(/^\d{2}:\d{2}$/)
     .nullable(),
   priority: z.enum(['high', 'medium', 'low']),
+  recurrence: recurrenceSchema.nullable(),
   steps: z.array(stepSchema),
 });
 
