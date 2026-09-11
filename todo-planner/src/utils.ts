@@ -15,6 +15,34 @@ export function weekdayCN(): string {
   return weekdays[new Date().getDay()];
 }
 
+/** 明天的本地日期 "YYYY-MM-DD" */
+export function tomorrowISO(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** "延后 15 分钟"对应的截止日期：当天，深夜则顺延到明天 */
+export function postpone15Deadline(): string {
+  const now = new Date();
+  const nearMidnight = now.getHours() === 23 && now.getMinutes() >= 45;
+  return nearMidnight ? tomorrowISO() : todayISO();
+}
+
+/** 触发一次轻震动（不支持时静默忽略，不报错） */
+export function vibrate(pattern: number | number[] = 12): void {
+  try {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(pattern);
+    }
+  } catch {
+    // 忽略
+  }
+}
+
 /** 把 "YYYY-MM-DD" 解析成当天 0 点（本地时区），避免被当成 UTC 造成偏移一天 */
 function parseLocalDate(date: string): Date {
   const [y, m, d] = date.split('-').map(Number);
