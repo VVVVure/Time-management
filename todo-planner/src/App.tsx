@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Calendar, Crosshair } from 'lucide-react';
+import { Calendar, CalendarDays, Crosshair } from 'lucide-react';
 import DateStrip from './components/DateStrip';
 import DayView from './components/DayView';
+import MonthView from './components/MonthView';
 import DecomposePreview, { type PreviewTask } from './components/DecomposePreview';
 import FocusView from './components/FocusView';
 import InputBar from './components/InputBar';
@@ -10,6 +11,7 @@ import TaskDetail from './components/TaskDetail';
 import TaskList from './components/TaskList';
 import { addTasks, getSettings, listTasks, updateTask } from './db';
 import { callDecompose, type DecomposeErrorKind, type DecomposeTask } from './decompose';
+import { syncRecurrenceInstances } from './recurrence';
 import { resplitStep } from './refine';
 import type { Task } from './types';
 import {
@@ -48,7 +50,7 @@ function App() {
   const [showBrainDump, setShowBrainDump] = useState(false);
   const [energyFilter, setEnergyFilter] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
-  const [homeMode, setHomeMode] = useState<'focus' | 'date'>('focus');
+  const [homeMode, setHomeMode] = useState<'focus' | 'date' | 'month'>('focus');
   const [selectedDate, setSelectedDate] = useState(() => todayISO());
 
   const refresh = useCallback(async () => {
@@ -57,9 +59,12 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    listTasks().then((t) => {
-      if (!cancelled) setTasks(t);
-    });
+    (async () => {
+      const loaded = await listTasks();
+      if (cancelled) return;
+      await syncRecurrenceInstances(loaded);
+      if (!cancelled) setTasks(await listTasks());
+    })();
     return () => {
       cancelled = true;
     };
@@ -172,6 +177,8 @@ function App() {
         status: 'todo',
         steps: [],
         isBrainDump: true,
+        recurrence: null,
+        recurrenceRootId: null,
         createdAt: now,
         updatedAt: now,
       },
@@ -211,6 +218,8 @@ function App() {
         status: 'todo',
         steps: [],
         isBrainDump: false,
+        recurrence: null,
+        recurrenceRootId: null,
         createdAt: now,
         updatedAt: now,
       },
@@ -241,6 +250,8 @@ function App() {
         energy: s.energy ?? null,
       })),
       isBrainDump: false,
+      recurrence: null,
+      recurrenceRootId: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -361,6 +372,16 @@ function App() {
               <Calendar size={16} />
               日期
             </button>
+            <button
+              type="button"
+              onClick={() => setHomeMode('month')}
+              className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-medium ${
+                homeMode === 'month' ? 'soft-shadow bg-white text-gray-900' : 'text-gray-500'
+              }`}
+            >
+              <CalendarDays size={16} />
+              月历
+            </button>
           </div>
         </header>
 
@@ -415,7 +436,7 @@ function App() {
                 </section>
               )}
             </>
-          ) : (
+          ) : homeMode === 'date' ? (
             <>
               <DateStrip
                 days={days}
@@ -424,6 +445,21 @@ function App() {
                 loadFor={(date) => loadDotsForDate(tasks, date)}
                 onSelect={setSelectedDate}
                 onBackToToday={() => setSelectedDate(todayISO())}
+              />
+              <DayView
+                tasks={dayTasks}
+                onOpenTask={openTask}
+                onPostpone15={postpone15}
+                onTomorrow={postponeTomorrow}
+                onResplit={resplit}
+              />
+            </>
+          ) : (
+            <>
+              <MonthView
+                selected={selectedDate}
+                onSelect={setSelectedDate}
+                loadFor={(date) => loadDotsForDate(tasks, date)}
               />
               <DayView
                 tasks={dayTasks}
