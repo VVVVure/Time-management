@@ -3,25 +3,22 @@ import { useKeyboardInset } from '../useKeyboardInset';
 
 interface Props {
   onSend: (text: string) => Promise<void>;
+  disabled?: boolean;
 }
 
-function InputBar({ onSend }: Props) {
+function InputBar({ onSend, disabled = false }: Props) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const keyboardInset = useKeyboardInset();
 
-  const canSend = text.trim().length > 0 && !sending;
+  const canSend = text.trim().length > 0 && !sending && !disabled;
 
-  const handleSend = async () => {
+  const handleSend = () => {
     const value = text.trim();
-    if (!value || sending) return;
+    if (!value || sending || disabled) return;
     setSending(true);
-    try {
-      await onSend(value);
-      setText('');
-    } finally {
-      setSending(false);
-    }
+    setText('');
+    onSend(value).finally(() => setSending(false));
   };
 
   return (
@@ -39,7 +36,8 @@ function InputBar({ onSend }: Props) {
             onChange={(e) => setText(e.target.value)}
             rows={2}
             placeholder="写下要做的事，或点键盘上的麦克风说话"
-            className="min-h-[44px] flex-1 resize-none rounded-xl bg-gray-100 px-3 py-2.5 text-base leading-snug text-gray-900 outline-none placeholder:text-gray-400"
+            disabled={disabled}
+            className="min-h-[44px] flex-1 resize-none rounded-xl bg-gray-100 px-3 py-2.5 text-base leading-snug text-gray-900 outline-none placeholder:text-gray-400 disabled:opacity-60"
             style={{ fontSize: 16 }}
           />
           <button

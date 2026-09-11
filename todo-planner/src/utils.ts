@@ -1,5 +1,20 @@
 import type { Step, Task } from './types';
 
+/** 今天的本地日期 "YYYY-MM-DD" */
+export function todayISO(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** 今天的星期几（中文） */
+export function weekdayCN(): string {
+  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+  return weekdays[new Date().getDay()];
+}
+
 /** 把 "YYYY-MM-DD" 解析成当天 0 点（本地时区），避免被当成 UTC 造成偏移一天 */
 function parseLocalDate(date: string): Date {
   const [y, m, d] = date.split('-').map(Number);

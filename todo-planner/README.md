@@ -1,32 +1,59 @@
-# React + TypeScript + Vite
+# 时间规划（todo-planner）
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+个人使用的时间规划 / 待办 PWA。输入一句话，AI 拆成可执行的小步骤，预览确认后保存到本地（IndexedDB）。
 
-Currently, two official plugins are available:
+## 技术栈
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React + TypeScript + Vite
+- Tailwind CSS
+- vite-plugin-pwa
+- Dexie（IndexedDB）
+- zod（校验 AI 返回）
+- Cloudflare Worker 中转调用 Claude API（代码在 `worker/` 目录）
 
-## React Compiler
+## 本地开发
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+手机联调（同一 WiFi）：
+
+```powershell
+npm run dev -- --host
+# 然后用电脑的局域网 IP 在手机浏览器打开
+```
+
+## 环境变量
+
+前端通过 `VITE_WORKER_URL` 指定 Worker 地址。复制示例文件为 `.env.local`：
+
+```powershell
+copy .env.example .env.local
+```
+
+然后编辑 `.env.local`：
+
+```
+VITE_WORKER_URL=https://todo-planner-worker.leoliu190071.workers.dev
+```
+
+`.env.local` 已被 `.gitignore`（`*.local` 规则）排除，不要提交到 Git。
+
+App 访问 Worker 的密码在 App 的「设置」页里填写并保存（存在本地 IndexedDB），不会出现在代码或打包产物里。
+
+## 常用命令
+
+```powershell
+npm run dev      # 开发服务器
+npm run build    # 类型检查 + 生产构建
+npm run preview  # 预览构建产物
+npm test         # 单元测试（vitest）
+npm run lint     # oxlint
+```
+
+## Worker
+
+Worker 代码在 `worker/`，见 `worker/README.md`。部署前需要在 worker 目录下设置
+`APP_PASSWORD` 和 `ANTHROPIC_API_KEY` 两个 secret。
