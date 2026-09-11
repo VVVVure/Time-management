@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Inbox, Loader2, Mic } from 'lucide-react';
+import { Loader2, Mic } from 'lucide-react';
 import { useState } from 'react';
 import { getSettings } from '../db';
 import { useKeyboardInset } from '../useKeyboardInset';
@@ -7,11 +7,12 @@ import { useVoiceRecorder } from '../useVoiceRecorder';
 
 interface Props {
   onSend: (text: string) => Promise<void>;
+  // 杂物箱入口暂时移除，但保留这个 prop 以兼容 App.tsx 现有的调用（不在此渲染入口）
   onBrainDump?: (text: string) => void;
   disabled?: boolean;
 }
 
-function InputBar({ onSend, onBrainDump, disabled = false }: Props) {
+function InputBar({ onSend, disabled = false }: Props) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const keyboardInset = useKeyboardInset();
@@ -30,13 +31,6 @@ function InputBar({ onSend, onBrainDump, disabled = false }: Props) {
     setSending(true);
     setText('');
     onSend(value).finally(() => setSending(false));
-  };
-
-  const handleBrainDump = () => {
-    const value = text.trim();
-    if (!value || sending || disabled) return;
-    setText('');
-    onBrainDump?.(value);
   };
 
   const handleMicDown = (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -82,16 +76,6 @@ function InputBar({ onSend, onBrainDump, disabled = false }: Props) {
             style={{ fontSize: 16 }}
           />
 
-          <button
-            type="button"
-            onClick={handleBrainDump}
-            disabled={!text.trim() || sending || disabled}
-            aria-label="存进杂物箱"
-            className="h-11 shrink-0 rounded-xl bg-gray-100 px-3 text-gray-600 transition disabled:opacity-40"
-          >
-            <Inbox size={18} />
-          </button>
-
           <motion.button
             type="button"
             onPointerDown={handleMicDown}
@@ -117,9 +101,9 @@ function InputBar({ onSend, onBrainDump, disabled = false }: Props) {
             )}
             <span className="relative flex items-center gap-1">
               {voice.status === 'uploading' ? (
-                <Loader2 size={18} className="animate-spin" />
+                <Loader2 size={24} className="animate-spin" />
               ) : (
-                <Mic size={18} />
+                <Mic size={24} />
               )}
               {voice.status === 'recording' && (
                 <span className="text-xs tabular-nums">{voice.elapsed}s</span>
