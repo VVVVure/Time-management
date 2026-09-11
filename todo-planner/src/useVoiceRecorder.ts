@@ -38,6 +38,7 @@ export function useVoiceRecorder({ getPassword, onResult }: Options) {
   const tickRef = useRef<number | null>(null);
   const maxRef = useRef<number | null>(null);
   const passwordRef = useRef('');
+  const startingRef = useRef(false);
   const onResultRef = useRef(onResult);
 
   useEffect(() => {
@@ -106,19 +107,22 @@ export function useVoiceRecorder({ getPassword, onResult }: Options) {
   const start = useCallback(async () => {
     setError(null);
 
-    if (recorderRef.current) return;
+    if (recorderRef.current || startingRef.current) return;
+    startingRef.current = true;
 
     if (
       typeof navigator === 'undefined' ||
       !navigator.mediaDevices?.getUserMedia ||
       typeof MediaRecorder === 'undefined'
     ) {
+      startingRef.current = false;
       setError('当前浏览器不支持录音，请用键盘输入（Safari 需要在 HTTPS 下使用）');
       return;
     }
 
     const password = await getPassword();
     if (!password) {
+      startingRef.current = false;
       setError('还没有设置 App 密码，请先到设置页填写');
       return;
     }
@@ -152,7 +156,9 @@ export function useVoiceRecorder({ getPassword, onResult }: Options) {
       maxRef.current = window.setTimeout(() => {
         stop();
       }, MAX_RECORD_SECONDS * 1000);
+      startingRef.current = false;
     } catch (err) {
+      startingRef.current = false;
       const name = (err as { name?: string })?.name;
       if (name === 'NotAllowedError' || name === 'SecurityError') {
         setError('麦克风权限被拒绝，请在系统设置里允许访问');
