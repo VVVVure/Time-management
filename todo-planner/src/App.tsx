@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import InputBar from './components/InputBar';
 import TaskList from './components/TaskList';
-import { listTasks } from './db';
+import { addTasks, listTasks } from './db';
 import type { Task } from './types';
 
 type View = { name: 'home' } | { name: 'detail'; taskId: string };
@@ -8,6 +9,10 @@ type View = { name: 'home' } | { name: 'detail'; taskId: string };
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [view, setView] = useState<View>({ name: 'home' });
+
+  const refresh = useCallback(async () => {
+    setTasks(await listTasks());
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -20,6 +25,24 @@ function App() {
   }, []);
 
   const openTask = (taskId: string) => setView({ name: 'detail', taskId });
+
+  const handleSend = async (text: string) => {
+    const now = new Date().toISOString();
+    await addTasks([
+      {
+        id: crypto.randomUUID(),
+        title: text,
+        rawInput: text,
+        deadline: null,
+        priority: 'medium',
+        status: 'todo',
+        steps: [],
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+    await refresh();
+  };
 
   if (view.name === 'detail') {
     const task = tasks.find((t) => t.id === view.taskId);
@@ -39,7 +62,7 @@ function App() {
   }
 
   return (
-    <div className="safe-top safe-bottom mx-auto flex min-h-full max-w-md flex-col px-4 pb-4 pt-4">
+    <div className="safe-top mx-auto flex min-h-full max-w-md flex-col px-4 pb-40 pt-4">
       <header className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">时间规划</h1>
         {/* T2.4 会在这里加入设置入口 */}
@@ -49,7 +72,7 @@ function App() {
         <TaskList tasks={tasks} onOpenTask={openTask} />
       </main>
 
-      {/* T2.2 会在这里加入底部输入栏 */}
+      <InputBar onSend={handleSend} />
     </div>
   );
 }
