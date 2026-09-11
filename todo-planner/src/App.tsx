@@ -61,7 +61,11 @@ function App() {
 
   const refreshWithSync = useCallback(async () => {
     const loaded = await listTasks();
-    await syncRecurrenceInstances(loaded);
+    try {
+      await syncRecurrenceInstances(loaded);
+    } catch {
+      // 同步失败不阻塞刷新
+    }
     setTasks(await listTasks());
   }, []);
 
@@ -70,7 +74,11 @@ function App() {
     (async () => {
       const loaded = await listTasks();
       if (cancelled) return;
-      await syncRecurrenceInstances(loaded);
+      try {
+        await syncRecurrenceInstances(loaded);
+      } catch {
+        // 同步失败不阻塞任务加载
+      }
       if (!cancelled) setTasks(await listTasks());
     })();
     return () => {
