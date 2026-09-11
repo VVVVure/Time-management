@@ -118,7 +118,10 @@ async function callClaude(
   });
 
   if (!res.ok) {
-    // 不把上游原始报错细节透露给前端
+    // 不把上游原始报错细节透露给前端，只打到 Worker 日志里用于排障
+    const status = res.status;
+    const body = await res.text();
+    console.error(`[upstream] Anthropic HTTP ${status}: ${body}`);
     throw new Error('UPSTREAM_ERROR');
   }
   return res.json();
