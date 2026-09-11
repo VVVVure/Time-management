@@ -6,19 +6,22 @@ import {
   addStep,
   deleteStep,
   deleteTask,
+  listTasks,
   moveStep,
   toggleStep,
   updateStep,
   updateTask,
 } from '../db';
+import { applyRecurrence, deleteSeries } from '../recurrence';
 import { resplitStep } from '../refine';
-import type { Priority, Step, Task } from '../types';
+import type { Priority, RecurrenceRule, Step, Task } from '../types';
 import {
   doneStepCount,
   formatMinutes,
   formatSchedule,
   postpone15Deadline,
   remainingMinutes,
+  todayISO,
   tomorrowISO,
   vibrate,
 } from '../utils';
@@ -41,6 +44,16 @@ const PRIORITY_CLASSES: Record<Priority, string> = {
   low: 'bg-gray-100 text-gray-600',
 };
 
+function recurrenceLabel(rule: RecurrenceRule | null): string {
+  if (!rule) return '不重复';
+  if (rule.freq === 'weekly' && rule.interval === 2) return '每两周';
+  if (rule.interval === 1) {
+    return { daily: '每天', weekly: '每周', monthly: '每月' }[rule.freq];
+  }
+  const unit = { daily: '天', weekly: '周', monthly: '月' }[rule.freq];
+  return `每 ${rule.interval} ${unit}`;
+}
+
 function TaskDetail({ task, onBack, onChanged }: Props) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(task.title);
@@ -51,6 +64,22 @@ function TaskDetail({ task, onBack, onChanged }: Props) {
   const [newStepMinutes, setNewStepMinutes] = useState(25);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [forgiveMsg, setForgiveMsg] = useState<string | null>(null);
+  const [editingRecurrence, setEditingRecurrence] = useState(false);
+  const [repEnabled, setRepEnabled] = useState(task.recurrence !== null);
+  const [repFreq, setRepFreq] = useState<RecurrenceRule['freq']>(task.recurrence?.freq ?? 'weekly');
+  const [repInterval, setRepInterval] = useState(task.recurrence?.interval ?? 1);
+  const [repEndDate, setRepEndDate] = useState(task.recurrence?.endDate ?? '');
+
+  const isRoot = task.recurrence !== null;
+  const isInstance = task.recurrenceRootId !== null;
+  const isCustomPreset =
+    repEnabled &&
+    !(
+      (repFreq === 'daily' && repInterval === 1) ||
+      (repFreq === 'weekly' && repInterval === 1) ||
+      (repFreq === 'weekly' && repInterval === 2) ||
+      (repFreq === 'monthly' && repInterval === 1)
+    );
 
   const total = task.steps.reduce((sum, s) => sum + s.estimatedMinutes, 0);
   const remaining = remainingMinutes(task.steps);
@@ -99,9 +128,39 @@ function TaskDetail({ task, onBack, onChanged }: Props) {
   };
 
   const handleDeleteTask = async () => {
-    await deleteTask(task.id);
+    if (isRoot) {
+      await deleteSeries(task.id, await listTasks());
+    } else {
+      await deleteTask(task.id);
+    }
     await onChanged();
     onBack();
+  };
+
+  const handleStopRecurrence = async () => {
+    await applyRecurrence(task, null);
+    await onChanged();
+  };
+
+  const openRecurrence = () => {
+    setRepEnabled(task.recurrence !== null);
+    setRepFreq(task.recurrence?.freq ?? 'weekly');
+    setRepInterval(task.recurrence?.interval ?? 1);
+    setRepEndDate(task.recurrence?.endDate ?? '');
+    setEditingRecurrence(true);
+  };
+
+  const saveRecurrence = async () => {
+    const rule: RecurrenceRule | null = repEnabled
+      ? {
+          freq: repFreq,
+          interval: Math.max(1, Math.round(repInterval) || 1),
+          endDate: repEndDate || null,
+        }
+      : null;
+    await applyRecurrence(task, rule);
+    setEditingRecurrence(false);
+    await onChanged();
   };
 
   const handlePostpone15 = async () => {
@@ -134,13 +193,24 @@ function TaskDetail({ task, onBack, onChanged }: Props) {
         >
           ‹ 返回
         </button>
-        <button
-          type="button"
-          onClick={() => setConfirmDelete(true)}
-          className="flex h-11 items-center text-base text-rose-400"
-        >
-          删除任务
-        </button>
+        <div className="flex items-center gap-3">
+          {isRoot && (
+            <button
+              type="button"
+              onClick={handleStopRecurrence}
+              className="flex h-11 items-center text-sm text-amber-600"
+            >
+              停止重复
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="flex h-11 items-center text-base text-rose-400"
+          >
+            删除任务
+          </button>
+        </div>
       </div>
 
       {/* 标题 */}
@@ -222,6 +292,23 @@ function TaskDetail({ task, onBack, onChanged }: Props) {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* 重复 */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {isInstance ? (
+          <p className="text-[13px] text-gray-400">🔁 这是重复系列中的一次，去根任务修改规则</p>
+        ) : (
+          <button
+            type="button"
+            onClick={openRecurrence}
+            className={`soft-shadow flex h-11 items-center rounded-xl px-3 text-sm ${
+              isRoot ? 'bg-blue-50 text-blue-700' : 'bg-white text-gray-700'
+            }`}
+          >
+            🔁 {recurrenceLabel(task.recurrence)}
+          </button>
+        )}
       </div>
 
       {/* 宽容型设计：过期任务给单键快捷操作 */}
@@ -340,12 +427,181 @@ function TaskDetail({ task, onBack, onChanged }: Props) {
         </button>
       )}
 
+      {/* 重复规则编辑 */}
+      {editingRecurrence && (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center">
+          <div className="w-full max-w-md rounded-t-3xl bg-white p-5 sm:rounded-3xl">
+            <h3 className="text-lg font-semibold">重复</h3>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setRepEnabled(false)}
+                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
+                  !repEnabled ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                不重复
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRepEnabled(true);
+                  setRepFreq('daily');
+                  setRepInterval(1);
+                }}
+                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
+                  repEnabled && repFreq === 'daily' && repInterval === 1
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                每天
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRepEnabled(true);
+                  setRepFreq('weekly');
+                  setRepInterval(1);
+                }}
+                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
+                  repEnabled && repFreq === 'weekly' && repInterval === 1
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                每周
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRepEnabled(true);
+                  setRepFreq('weekly');
+                  setRepInterval(2);
+                }}
+                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
+                  repEnabled && repFreq === 'weekly' && repInterval === 2
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                每两周
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRepEnabled(true);
+                  setRepFreq('monthly');
+                  setRepInterval(1);
+                }}
+                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
+                  repEnabled && repFreq === 'monthly' && repInterval === 1
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                每月
+              </button>
+              <button
+                type="button"
+                onClick={() => setRepEnabled(true)}
+                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
+                  isCustomPreset ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                自定义
+              </button>
+            </div>
+
+            {repEnabled && (
+              <div className="mt-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">每</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={repInterval}
+                    onChange={(e) => setRepInterval(Number(e.target.value))}
+                    className="w-16 rounded-xl bg-gray-100 px-2 py-2 text-sm outline-none"
+                  />
+                  <select
+                    value={repFreq}
+                    onChange={(e) => setRepFreq(e.target.value as RecurrenceRule['freq'])}
+                    className="rounded-xl bg-gray-100 px-2 py-2 text-sm outline-none"
+                  >
+                    <option value="daily">天</option>
+                    <option value="weekly">周</option>
+                    <option value="monthly">月</option>
+                  </select>
+                </div>
+
+                <div>
+                  <span className="text-sm text-gray-500">结束</span>
+                  <div className="mt-1 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRepEndDate('')}
+                      className={`rounded-full px-3 py-1.5 text-[13px] ${
+                        !repEndDate ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      一直重复
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRepEndDate(todayISO())}
+                      className={`rounded-full px-3 py-1.5 text-[13px] ${
+                        repEndDate ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      到某天
+                    </button>
+                  </div>
+                  {repEndDate && (
+                    <input
+                      type="date"
+                      value={repEndDate}
+                      onChange={(e) => setRepEndDate(e.target.value)}
+                      className="mt-2 rounded-xl bg-gray-100 px-2 py-1.5 text-sm outline-none"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingRecurrence(false)}
+                className="min-h-[44px] flex-1 rounded-xl bg-gray-100 py-2.5 text-gray-700"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={saveRecurrence}
+                className="min-h-[44px] flex-1 rounded-xl bg-blue-600 py-2.5 font-medium text-white"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 删除确认 */}
       {confirmDelete && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-8">
           <div className="w-full rounded-2xl bg-white p-5">
-            <h3 className="text-lg font-semibold">删除这个任务？</h3>
-            <p className="mt-1 text-sm text-gray-500">任务和它的所有步骤都会被删除，无法恢复。</p>
+            <h3 className="text-lg font-semibold">
+              {isRoot ? '删除整个重复系列？' : '删除这个任务？'}
+            </h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {isRoot
+                ? '这会删除这个重复系列以及它生成的所有记录（包括过去和未来），无法恢复。'
+                : '任务和它的所有步骤都会被删除，无法恢复。'}
+            </p>
             <div className="mt-4 flex gap-3">
               <button
                 type="button"
