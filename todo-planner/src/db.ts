@@ -6,7 +6,7 @@ interface SettingsRow extends Settings {
   id: string;
 }
 
-const SETTINGS_ID = 'default';
+export const SETTINGS_ID = 'default';
 
 export const DEFAULT_SETTINGS: Settings = {
   maxMinutesPerStep: 25,
