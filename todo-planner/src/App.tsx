@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import InputBar from './components/InputBar';
+import SettingsPage from './components/SettingsPage';
 import TaskDetail from './components/TaskDetail';
 import TaskList from './components/TaskList';
 import { addTasks, listTasks } from './db';
 import type { Task } from './types';
 
-type View = { name: 'home' } | { name: 'detail'; taskId: string };
+type View =
+  | { name: 'home' }
+  | { name: 'detail'; taskId: string }
+  | { name: 'settings' };
 
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -45,6 +49,10 @@ function App() {
     await refresh();
   };
 
+  if (view.name === 'settings') {
+    return <SettingsPage onBack={() => setView({ name: 'home' })} />;
+  }
+
   if (view.name === 'detail') {
     const task = tasks.find((t) => t.id === view.taskId);
     if (!task) {
@@ -70,7 +78,13 @@ function App() {
     <div className="safe-top mx-auto flex min-h-full max-w-md flex-col px-4 pb-40 pt-4">
       <header className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">时间规划</h1>
-        {/* T2.4 会在这里加入设置入口 */}
+        <button
+          type="button"
+          onClick={() => setView({ name: 'settings' })}
+          className="rounded-xl bg-white px-3 py-1.5 text-sm text-gray-600 shadow-sm"
+        >
+          ⚙️ 设置
+        </button>
       </header>
 
       <main className="flex-1">
