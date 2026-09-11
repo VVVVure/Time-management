@@ -21,10 +21,10 @@ import {
   formatSchedule,
   postpone15Deadline,
   remainingMinutes,
-  todayISO,
   tomorrowISO,
   vibrate,
 } from '../utils';
+import RecurrencePicker from './RecurrencePicker';
 
 interface Props {
   task: Task;
@@ -66,21 +66,11 @@ function TaskDetail({ task, onBack, onChanged, onChangedWithSync }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [forgiveMsg, setForgiveMsg] = useState<string | null>(null);
   const [editingRecurrence, setEditingRecurrence] = useState(false);
-  const [repEnabled, setRepEnabled] = useState(task.recurrence !== null);
-  const [repFreq, setRepFreq] = useState<RecurrenceRule['freq']>(task.recurrence?.freq ?? 'weekly');
-  const [repInterval, setRepInterval] = useState(task.recurrence?.interval ?? 1);
-  const [repEndDate, setRepEndDate] = useState(task.recurrence?.endDate ?? '');
+  const [repDraft, setRepDraft] = useState<RecurrenceRule | null>(task.recurrence);
 
   const isRoot = task.recurrence !== null;
   const isInstance = task.recurrenceRootId !== null;
-  const isCustomPreset =
-    repEnabled &&
-    !(
-      (repFreq === 'daily' && repInterval === 1) ||
-      (repFreq === 'weekly' && repInterval === 1) ||
-      (repFreq === 'weekly' && repInterval === 2) ||
-      (repFreq === 'monthly' && repInterval === 1)
-    );
+
 
   const total = task.steps.reduce((sum, s) => sum + s.estimatedMinutes, 0);
   const remaining = remainingMinutes(task.steps);
@@ -144,22 +134,12 @@ function TaskDetail({ task, onBack, onChanged, onChangedWithSync }: Props) {
   };
 
   const openRecurrence = () => {
-    setRepEnabled(task.recurrence !== null);
-    setRepFreq(task.recurrence?.freq ?? 'weekly');
-    setRepInterval(task.recurrence?.interval ?? 1);
-    setRepEndDate(task.recurrence?.endDate ?? '');
+    setRepDraft(task.recurrence);
     setEditingRecurrence(true);
   };
 
   const saveRecurrence = async () => {
-    const rule: RecurrenceRule | null = repEnabled
-      ? {
-          freq: repFreq,
-          interval: Math.max(1, Math.round(repInterval) || 1),
-          endDate: repEndDate || null,
-        }
-      : null;
-    await applyRecurrence(task, rule);
+    await applyRecurrence(task, repDraft);
     setEditingRecurrence(false);
     if (onChangedWithSync) {
       await onChangedWithSync();
@@ -440,142 +420,9 @@ function TaskDetail({ task, onBack, onChanged, onChangedWithSync }: Props) {
           <div className="w-full max-w-md rounded-t-3xl bg-white p-5 sm:rounded-3xl">
             <h3 className="text-lg font-semibold">重复</h3>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setRepEnabled(false)}
-                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
-                  !repEnabled ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                不重复
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRepEnabled(true);
-                  setRepFreq('daily');
-                  setRepInterval(1);
-                }}
-                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
-                  repEnabled && repFreq === 'daily' && repInterval === 1
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                每天
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRepEnabled(true);
-                  setRepFreq('weekly');
-                  setRepInterval(1);
-                }}
-                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
-                  repEnabled && repFreq === 'weekly' && repInterval === 1
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                每周
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRepEnabled(true);
-                  setRepFreq('weekly');
-                  setRepInterval(2);
-                }}
-                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
-                  repEnabled && repFreq === 'weekly' && repInterval === 2
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                每两周
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setRepEnabled(true);
-                  setRepFreq('monthly');
-                  setRepInterval(1);
-                }}
-                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
-                  repEnabled && repFreq === 'monthly' && repInterval === 1
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                每月
-              </button>
-              <button
-                type="button"
-                onClick={() => setRepEnabled(true)}
-                className={`min-h-[44px] rounded-full px-3 py-2 text-[13px] font-medium ${
-                  isCustomPreset ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
-                }`}
-              >
-                自定义
-              </button>
+            <div className="mt-3">
+              <RecurrencePicker value={repDraft} onChange={setRepDraft} />
             </div>
-
-            {repEnabled && (
-              <div className="mt-3 space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">每</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={repInterval}
-                    onChange={(e) => setRepInterval(Number(e.target.value))}
-                    className="w-16 rounded-xl bg-gray-100 px-2 py-2 text-sm outline-none"
-                  />
-                  <select
-                    value={repFreq}
-                    onChange={(e) => setRepFreq(e.target.value as RecurrenceRule['freq'])}
-                    className="rounded-xl bg-gray-100 px-2 py-2 text-sm outline-none"
-                  >
-                    <option value="daily">天</option>
-                    <option value="weekly">周</option>
-                    <option value="monthly">月</option>
-                  </select>
-                </div>
-
-                <div>
-                  <span className="text-sm text-gray-500">结束</span>
-                  <div className="mt-1 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRepEndDate('')}
-                      className={`rounded-full px-3 py-1.5 text-[13px] ${
-                        !repEndDate ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
-                      一直重复
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRepEndDate(todayISO())}
-                      className={`rounded-full px-3 py-1.5 text-[13px] ${
-                        repEndDate ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
-                      到某天
-                    </button>
-                  </div>
-                  {repEndDate && (
-                    <input
-                      type="date"
-                      value={repEndDate}
-                      onChange={(e) => setRepEndDate(e.target.value)}
-                      className="mt-2 rounded-xl bg-gray-100 px-2 py-1.5 text-sm outline-none"
-                    />
-                  )}
-                </div>
-              </div>
-            )}
 
             <div className="mt-4 flex gap-3">
               <button
