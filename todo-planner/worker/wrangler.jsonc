@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "todo-planner-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    // 拆解用速度快的模型，具体模型名以官方文档为准：
+    // https://docs.claude.com/en/api/overview
+    "MODEL": "claude-3-5-haiku-latest",
+    // 部署后改成 Pages 的域名，例如 https://todo-planner.pages.dev
+    // 本地开发会自动允许 localhost，无需改这里
+    "ALLOWED_ORIGIN": ""
+  }
+}
