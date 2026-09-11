@@ -98,6 +98,7 @@ describe('callDecompose', () => {
               {
                 title: '完成报告',
                 deadline: '2026-09-12',
+                time: null,
                 priority: 'high',
                 steps: [{ title: '写初稿', estimatedMinutes: 25 }],
               },

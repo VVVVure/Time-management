@@ -11,6 +11,10 @@ const taskSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .nullable(),
+  time: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .nullable(),
   priority: z.enum(['high', 'medium', 'low']),
   steps: z.array(stepSchema),
 });

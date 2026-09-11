@@ -7,6 +7,7 @@ export interface Task {
   title: string;              // AI 整理后的简洁标题，如"完成 UX 课调研报告"
   rawInput: string;           // 我当时说的或写的原话，保留备查
   deadline: string | null;    // 截止日期 "YYYY-MM-DD"；没提到就是 null
+  time: string | null;        // 具体时间点 "HH:MM"（24 小时制），如 11:15 接人；没提到就是 null
   priority: Priority;
   status: TaskStatus;         // 有步骤被勾选 → doing；全部完成 → done
   steps: Step[];

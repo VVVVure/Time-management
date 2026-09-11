@@ -24,6 +24,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     title: '测试任务',
     rawInput: '测试原话',
     deadline: null,
+    time: null,
     priority: 'medium',
     status: 'todo',
     steps: [],

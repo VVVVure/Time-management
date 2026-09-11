@@ -47,10 +47,12 @@ export function computeStatus(steps: Step[]): TaskStatus {
   return 'doing';
 }
 
-/** 列出所有任务（按创建时间从旧到新） */
+/** 列出所有任务（按创建时间从旧到新），并补齐旧数据里可能缺失的 time 字段 */
 export async function listTasks(): Promise<Task[]> {
   const tasks = await db.tasks.toArray();
-  return tasks.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return tasks
+    .map((t) => ({ ...t, time: t.time ?? null }))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 /** 一次添加一个或多个任务，返回新增任务的 id */

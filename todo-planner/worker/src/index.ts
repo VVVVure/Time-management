@@ -22,14 +22,15 @@ const MAX_AUDIO_SIZE = 15 * 1024 * 1024; // 15MB
 const SYSTEM_PROMPT = `你是一个时间规划助手，负责把用户输入整理成任务和可执行的小步骤。
 
 规则：
-1. 一句话可能包含多件事。例如"明天交报告，周末还得收拾房间"要拆成两个独立任务。
+1. 一句话可能包含多件事，但如果是同一次出行/同一件事里的连续几站（例如"接了Ryan再去接林紫樱"），只拆成一个任务，用步骤表示各站；只有明显不相关的独立事情才拆成多个任务。
 2. 语音听写的文字不规范，可能有口头禅、同音错字、没有标点。先理解意图，再整理成干净的标题，不要照抄原话。
 3. 步骤要"坐下就能开始做"。每个步骤以动词开头，内容具体；单个步骤的预估时间不超过用户给定的每步最长分钟数，超过就继续拆。
-4. 步骤数量合理。每个任务 1 到 8 步；简单的事只拆 1 步，不要硬拆；特别大的目标只拆第一周能做的具体步骤。
-5. 日期换算。根据用户给的"今天日期"和"星期几"，把"明天""这周末""下周五"换算成具体日期（YYYY-MM-DD）；有歧义按最常见理解处理；没提到截止时间就填 null，不要编造。
-6. 优先级。用户明确表达紧急或重要时填 high，明确说不急时填 low，其他情况一律 medium。
-7. 信息太模糊时不要猜（例如"搞一下那个东西"）。此时不返回任务，改为返回一个追问问题。
-8. 只通过调用工具返回结果，不要输出任何其他文字。`;
+4. 步骤数量合理。每个任务 1 到 8 步；任何情况下每个任务的 steps 都不能是空数组，哪怕最简单的一件事也要至少 1 步；简单的事只拆 1 步，不要硬拆；特别大的目标只拆第一周能做的具体步骤。
+5. 日期换算。根据用户给的"今天日期"和"星期几"，把"明天""这周末""下周五"换算成具体日期，填到 deadline（YYYY-MM-DD）；有歧义按最常见理解处理；没提到日期就填 null，不要编造。
+6. 时间提取。如果输入里提到具体时间点（"11点15""下午3点""晚上7点"这种），把时间提取到 time 字段（HH:MM，24 小时制），不要把时间信息留在 title 或 deadline 里；没提到具体时间点就填 null。
+7. 优先级。用户明确表达紧急或重要时填 high，明确说不急时填 low，其他情况一律 medium。
+8. 信息太模糊时不要猜（例如"搞一下那个东西"）。此时不返回任务，改为返回一个追问问题。
+9. 只通过调用工具返回结果，不要输出任何其他文字。`;
 
 function json(data: unknown, status: number, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -153,6 +154,11 @@ const decomposeTool = {
               type: ['string', 'null'],
               description: '截止日期 YYYY-MM-DD，没提到就是 null',
             },
+            time: {
+              type: ['string', 'null'],
+              description:
+                '具体时间点 HH:MM（24 小时制），如提到"11点15分""下午3点"这类就填，没提到就是 null',
+            },
             priority: { type: 'string', enum: ['high', 'medium', 'low'] },
             steps: {
               type: 'array',
@@ -166,7 +172,7 @@ const decomposeTool = {
               },
             },
           },
-          required: ['title', 'deadline', 'priority', 'steps'],
+          required: ['title', 'deadline', 'time', 'priority', 'steps'],
         },
       },
     },
@@ -204,6 +210,7 @@ interface NormalizedStep {
 interface NormalizedTask {
   title: string;
   deadline: string | null;
+  time: string | null;
   priority: 'high' | 'medium' | 'low';
   steps: NormalizedStep[];
 }
@@ -231,6 +238,7 @@ function normalizeDecompose(input: unknown): {
       const task = t as {
         title?: unknown;
         deadline?: unknown;
+        time?: unknown;
         priority?: unknown;
         steps?: unknown;
       };
@@ -241,14 +249,21 @@ function normalizeDecompose(input: unknown): {
         typeof task.deadline === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(task.deadline)
           ? task.deadline
           : null;
+      const time =
+        typeof task.time === 'string' && /^\d{2}:\d{2}$/.test(task.time) ? task.time : null;
       const priority =
         task.priority === 'high' || task.priority === 'medium' || task.priority === 'low'
           ? task.priority
           : 'medium';
-      const steps = (Array.isArray(task.steps) ? task.steps : [])
+      const normalizedSteps = (Array.isArray(task.steps) ? task.steps : [])
         .map(normalizeStep)
         .filter((s): s is NormalizedStep => s !== null);
-      return { title, deadline, priority, steps };
+      // 双重保险：AI 万一返回空 steps，生成一个兜底步骤，绝不返回空数组
+      const steps =
+        normalizedSteps.length > 0
+          ? normalizedSteps
+          : [{ title, estimatedMinutes: 15 }];
+      return { title, deadline, time, priority, steps };
     })
     .filter((t): t is NormalizedTask => t !== null);
 
