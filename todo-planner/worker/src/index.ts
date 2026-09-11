@@ -234,7 +234,7 @@ function normalizeStep(value: unknown): NormalizedStep | null {
   return { title, estimatedMinutes: minutes, energy };
 }
 
-function normalizeDecompose(input: unknown): {
+export function normalizeDecompose(input: unknown): {
   tasks: NormalizedTask[];
   question: string | null;
 } {
@@ -272,7 +272,7 @@ function normalizeDecompose(input: unknown): {
       const steps =
         normalizedSteps.length > 0
           ? normalizedSteps
-          : [{ title, estimatedMinutes: 15 }];
+          : [{ title, estimatedMinutes: 15, energy: null }];
       return { title, deadline, time, priority, steps };
     })
     .filter((t): t is NormalizedTask => t !== null);
