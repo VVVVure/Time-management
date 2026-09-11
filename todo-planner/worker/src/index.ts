@@ -26,11 +26,13 @@ const SYSTEM_PROMPT = `你是一个时间规划助手，负责把用户输入整
 2. 语音听写的文字不规范，可能有口头禅、同音错字、没有标点。先理解意图，再整理成干净的标题，不要照抄原话。
 3. 步骤要"坐下就能开始做"。每个步骤以动词开头，内容具体；单个步骤的预估时间不超过用户给定的每步最长分钟数，超过就继续拆。
 4. 步骤数量合理。每个任务 1 到 8 步；任何情况下每个任务的 steps 都不能是空数组，哪怕最简单的一件事也要至少 1 步；简单的事只拆 1 步，不要硬拆；特别大的目标只拆第一周能做的具体步骤。
-5. 日期换算。根据用户给的"今天日期"和"星期几"，把"明天""这周末""下周五"换算成具体日期，填到 deadline（YYYY-MM-DD）；有歧义按最常见理解处理；没提到日期就填 null，不要编造。
-6. 时间提取。如果输入里提到具体时间点（"11点15""下午3点""晚上7点"这种），把时间提取到 time 字段（HH:MM，24 小时制），不要把时间信息留在 title 或 deadline 里；没提到具体时间点就填 null。
-7. 优先级。用户明确表达紧急或重要时填 high，明确说不急时填 low，其他情况一律 medium。
-8. 信息太模糊时不要猜（例如"搞一下那个东西"）。此时不返回任务，改为返回一个追问问题。
-9. 只通过调用工具返回结果，不要输出任何其他文字。`;
+5. 破冰步。每个任务的第一步必须是门槛极低的启动动作，预估时间不超过 5 分钟，动作具体到"伸手就能做"的程度（例如"完成 UX 报告"的第一步不是"读作业要求（15分钟）"，而是"打开电脑，新建一个叫 UX调研 的文档（3分钟）"）；第二步开始可以正常拆解。真正的单一微小动作（如"取快递""给妈妈打电话"）本来就该是 1 步，不用刻意再拆出一个更短的破冰步。
+6. 日期换算。根据用户给的"今天日期"和"星期几"，把"明天""这周末""下周五"换算成具体日期，填到 deadline（YYYY-MM-DD）；有歧义按最常见理解处理；没提到日期就填 null，不要编造。
+7. 时间提取。如果输入里提到具体时间点（"11点15""下午3点""晚上7点"这种），把时间提取到 time 字段（HH:MM，24 小时制），不要把时间信息留在 title 或 deadline 里；没提到具体时间点就填 null。
+8. 精力消耗。给每个步骤判断精力消耗并填 energy：需要深度思考/创造性投入的（如"写结论""分析数据"）填 high；机械性/体力性的简单动作（如"倒垃圾""发一封确认邮件""打电话约时间"）填 low；不确定的填 null。
+9. 优先级。用户明确表达紧急或重要时填 high，明确说不急时填 low，其他情况一律 medium。
+10. 信息太模糊时不要猜（例如"搞一下那个东西"）。此时不返回任务，改为返回一个追问问题。
+11. 只通过调用工具返回结果，不要输出任何其他文字。`;
 
 function json(data: unknown, status: number, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -167,8 +169,14 @@ const decomposeTool = {
                 properties: {
                   title: { type: 'string', description: '动词开头的具体动作' },
                   estimatedMinutes: { type: 'number', description: '预估分钟数' },
+                  energy: {
+                    type: ['string', 'null'],
+                    enum: ['high', 'low', null],
+                    description:
+                      '精力消耗：high=需要深度思考/创造性投入，low=机械/体力性简单动作，不确定为 null',
+                  },
                 },
-                required: ['title', 'estimatedMinutes'],
+                required: ['title', 'estimatedMinutes', 'energy'],
               },
             },
           },
@@ -205,6 +213,7 @@ const refineTool = {
 interface NormalizedStep {
   title: string;
   estimatedMinutes: number;
+  energy: 'high' | 'low' | null;
 }
 
 interface NormalizedTask {
@@ -216,12 +225,13 @@ interface NormalizedTask {
 }
 
 function normalizeStep(value: unknown): NormalizedStep | null {
-  const s = value as { title?: unknown; estimatedMinutes?: unknown };
+  const s = value as { title?: unknown; estimatedMinutes?: unknown; energy?: unknown };
   if (!s || typeof s !== 'object') return null;
   const title = typeof s.title === 'string' ? s.title.trim() : '';
   if (!title) return null;
   const minutes = Math.max(1, Math.round(Number(s.estimatedMinutes) || 15));
-  return { title, estimatedMinutes: minutes };
+  const energy = s.energy === 'high' || s.energy === 'low' ? s.energy : null;
+  return { title, estimatedMinutes: minutes, energy };
 }
 
 function normalizeDecompose(input: unknown): {
