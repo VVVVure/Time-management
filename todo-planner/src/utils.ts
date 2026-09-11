@@ -129,3 +129,92 @@ export function sortTasks(tasks: Task[]): Task[] {
     return a.createdAt.localeCompare(b.createdAt);
   });
 }
+
+/* ---------- 日期浏览模式相关 ---------- */
+
+export interface DayInfo {
+  date: string;
+  weekdayShort: string;
+  dayNumber: number;
+  isToday: boolean;
+}
+
+const WEEKDAY_SHORT = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+function toDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** 生成日期窗口：今天往前 2 天、往后 7 天 */
+export function buildDateWindow(daysBefore = 2, daysAfter = 7): DayInfo[] {
+  const result: DayInfo[] = [];
+  const base = new Date();
+  for (let i = -daysBefore; i <= daysAfter; i++) {
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
+    result.push({
+      date: toDateStr(d),
+      weekdayShort: WEEKDAY_SHORT[d.getDay()],
+      dayNumber: d.getDate(),
+      isToday: i === 0,
+    });
+  }
+  return result;
+}
+
+/** 取某天的任务（排除杂物箱） */
+export function tasksForDate(tasks: Task[], date: string): Task[] {
+  return tasks.filter((t) => !t.isBrainDump && t.deadline === date);
+}
+
+/** 某天的任务负荷点数：1~3 个点封顶 */
+export function loadDotsForDate(tasks: Task[], date: string): number {
+  return Math.min(3, tasksForDate(tasks, date).length);
+}
+
+export interface TimeBlock {
+  key: 'morning' | 'afternoon' | 'evening' | 'anytime';
+  label: string;
+  tasks: Task[];
+}
+
+/** 按 time 字段粗分晨间/午后/晚间/未定时间四个区块，空区块自动隐藏 */
+export function groupByTimeOfDay(tasks: Task[]): TimeBlock[] {
+  const morning: Task[] = [];
+  const afternoon: Task[] = [];
+  const evening: Task[] = [];
+  const anytime: Task[] = [];
+
+  for (const t of tasks) {
+    if (!t.time) {
+      anytime.push(t);
+    } else if (t.time < '12:00') {
+      morning.push(t);
+    } else if (t.time < '18:00') {
+      afternoon.push(t);
+    } else {
+      evening.push(t);
+    }
+  }
+
+  const byTime = (a: Task, b: Task) =>
+    (a.time ?? '99:99').localeCompare(b.time ?? '99:99') ||
+    a.createdAt.localeCompare(b.createdAt);
+  const byCreated = (a: Task, b: Task) => a.createdAt.localeCompare(b.createdAt);
+
+  morning.sort(byTime);
+  afternoon.sort(byTime);
+  evening.sort(byTime);
+  anytime.sort(byCreated);
+
+  const blocks: TimeBlock[] = [
+    { key: 'morning', label: '🌅 晨间', tasks: morning },
+    { key: 'afternoon', label: '☀️ 午后', tasks: afternoon },
+    { key: 'evening', label: '🌙 晚间', tasks: evening },
+    { key: 'anytime', label: '🕐 未定时间', tasks: anytime },
+  ];
+  return blocks.filter((b) => b.tasks.length > 0);
+}
