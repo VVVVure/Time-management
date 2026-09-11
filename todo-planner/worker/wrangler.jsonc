@@ -9,6 +9,6 @@
     "MODEL": "claude-haiku-4-5-20251001",
     // 部署后改成 Pages 的域名，例如 https://todo-planner.pages.dev
     // 本地开发会自动允许 localhost，无需改这里
-    "ALLOWED_ORIGIN": ""
+    "ALLOWED_ORIGIN": "https://time-management-2t5.pages.dev"
   }
 }
