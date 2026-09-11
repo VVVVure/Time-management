@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeDecompose } from './index';
+import { normalizeDecompose } from './normalize';
 
 describe('normalizeDecompose', () => {
   it('空 steps 时生成兜底步骤，且包含 energy: null', () => {
