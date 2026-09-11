@@ -42,6 +42,11 @@ export function resolvePreviewDeadline(
   return null;
 }
 
+/** 聚焦模式首页是否应该显示这个任务：没日期，或日期在今天/已过期 */
+export function isFocusRelevant(task: Task): boolean {
+  return !task.deadline || task.deadline <= todayISO();
+}
+
 /** 触发一次轻震动（不支持时静默忽略，不报错） */
 export function vibrate(pattern: number | number[] = 12): void {
   try {

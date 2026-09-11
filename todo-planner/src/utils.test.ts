@@ -3,9 +3,12 @@ import type { Task } from './types';
 import {
   buildDateWindow,
   groupByTimeOfDay,
+  isFocusRelevant,
   loadDotsForDate,
   resolvePreviewDeadline,
   tasksForDate,
+  todayISO,
+  tomorrowISO,
 } from './utils';
 
 function makeTask(overrides: Partial<Task> = {}): Task {
@@ -86,6 +89,24 @@ describe('resolvePreviewDeadline', () => {
 
   it('无日期也无重复规则时返回 null', () => {
     expect(resolvePreviewDeadline('', null)).toBeNull();
+  });
+});
+
+describe('isFocusRelevant', () => {
+  it('没日期的任务应该显示', () => {
+    expect(isFocusRelevant(makeTask({ deadline: null }))).toBe(true);
+  });
+
+  it('今天的任务应该显示', () => {
+    expect(isFocusRelevant(makeTask({ deadline: todayISO() }))).toBe(true);
+  });
+
+  it('已过期的任务应该显示', () => {
+    expect(isFocusRelevant(makeTask({ deadline: '2020-01-01' }))).toBe(true);
+  });
+
+  it('未来的任务不应该显示', () => {
+    expect(isFocusRelevant(makeTask({ deadline: tomorrowISO() }))).toBe(false);
   });
 });
 

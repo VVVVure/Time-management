@@ -17,6 +17,7 @@ import type { Task } from './types';
 import {
   buildDateWindow,
   daysUntil,
+  isFocusRelevant,
   loadDotsForDate,
   postpone15Deadline,
   resolvePreviewDeadline,
@@ -79,10 +80,11 @@ function App() {
 
   const normalTasks = tasks.filter((t) => !t.isBrainDump);
   const brainDumpTasks = tasks.filter((t) => t.isBrainDump);
-  const lowEnergyTasks = normalTasks.filter((t) =>
+  const focusScopeTasks = normalTasks.filter(isFocusRelevant);
+  const lowEnergyTasks = focusScopeTasks.filter((t) =>
     t.steps.some((s) => !s.done && s.energy === 'low'),
   );
-  const visibleTasks = energyFilter ? lowEnergyTasks : normalTasks;
+  const visibleTasks = energyFilter ? lowEnergyTasks : focusScopeTasks;
   const overdueTasks = normalTasks.filter(
     (t) => t.status !== 'done' && t.deadline && daysUntil(t.deadline) < 0,
   );
@@ -421,7 +423,7 @@ function App() {
           {homeMode === 'focus' ? (
             <>
               <FocusView
-                tasks={normalTasks}
+                tasks={focusScopeTasks}
                 preferLowEnergy={energyFilter}
                 onOpenTask={openTask}
               />
