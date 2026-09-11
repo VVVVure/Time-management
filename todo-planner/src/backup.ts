@@ -26,7 +26,25 @@ function isStep(value: unknown): value is Step {
     typeof value.estimatedMinutes === 'number' &&
     typeof value.done === 'boolean' &&
     (value.doneAt === null || typeof value.doneAt === 'string') &&
-    typeof value.order === 'number'
+    typeof value.order === 'number' &&
+    // energy 是后来新增的字段，旧备份可以缺失；但一旦存在必须是合法值
+    (value.energy === undefined ||
+      value.energy === null ||
+      value.energy === 'high' ||
+      value.energy === 'low')
+  );
+}
+
+function isRecurrence(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return (
+    (value.freq === 'daily' || value.freq === 'weekly' || value.freq === 'monthly') &&
+    typeof value.interval === 'number' &&
+    Number.isFinite(value.interval) &&
+    value.interval >= 1 &&
+    (value.endDate === undefined ||
+      value.endDate === null ||
+      (typeof value.endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.endDate)))
   );
 }
 
@@ -37,6 +55,15 @@ function isTask(value: unknown): value is Task {
     typeof value.title === 'string' &&
     typeof value.rawInput === 'string' &&
     (value.deadline === null || typeof value.deadline === 'string') &&
+    // 后续新增的字段旧备份可以缺失，但一旦存在必须是合法类型
+    (value.time === undefined ||
+      value.time === null ||
+      (typeof value.time === 'string' && /^\d{2}:\d{2}$/.test(value.time))) &&
+    (value.isBrainDump === undefined || typeof value.isBrainDump === 'boolean') &&
+    (value.recurrence === undefined || value.recurrence === null || isRecurrence(value.recurrence)) &&
+    (value.recurrenceRootId === undefined ||
+      value.recurrenceRootId === null ||
+      typeof value.recurrenceRootId === 'string') &&
     PRIORITIES.includes(value.priority as Priority) &&
     STATUSES.includes(value.status as TaskStatus) &&
     Array.isArray(value.steps) &&
