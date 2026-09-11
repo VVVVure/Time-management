@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Calendar, Crosshair } from 'lucide-react';
+import DateStrip from './components/DateStrip';
+import DayView from './components/DayView';
 import DecomposePreview, { type PreviewTask } from './components/DecomposePreview';
 import FocusView from './components/FocusView';
 import InputBar from './components/InputBar';
@@ -9,7 +12,16 @@ import { addTasks, getSettings, listTasks, updateTask } from './db';
 import { callDecompose, type DecomposeErrorKind, type DecomposeTask } from './decompose';
 import { resplitStep } from './refine';
 import type { Task } from './types';
-import { daysUntil, postpone15Deadline, todayISO, tomorrowISO, weekdayCN } from './utils';
+import {
+  buildDateWindow,
+  daysUntil,
+  loadDotsForDate,
+  postpone15Deadline,
+  tasksForDate,
+  todayISO,
+  tomorrowISO,
+  weekdayCN,
+} from './utils';
 
 type View =
   | { name: 'home' }
@@ -36,6 +48,8 @@ function App() {
   const [showBrainDump, setShowBrainDump] = useState(false);
   const [energyFilter, setEnergyFilter] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
+  const [homeMode, setHomeMode] = useState<'focus' | 'date'>('focus');
+  const [selectedDate, setSelectedDate] = useState(() => todayISO());
 
   const refresh = useCallback(async () => {
     setTasks(await listTasks());
@@ -60,6 +74,9 @@ function App() {
   const overdueTasks = normalTasks.filter(
     (t) => t.status !== 'done' && t.deadline && daysUntil(t.deadline) < 0,
   );
+  const days = useMemo(() => buildDateWindow(), []);
+  const dayTasks = tasksForDate(tasks, selectedDate);
+  const isTodaySelected = selectedDate === todayISO();
 
   const openTask = (taskId: string) => setView({ name: 'detail', taskId });
 
@@ -298,24 +315,51 @@ function App() {
   } else {
     content = (
       <div className="safe-top mx-auto flex min-h-full max-w-md flex-col px-4 pb-40 pt-4">
-        <header className="mb-4 flex items-center justify-between">
-          <h1 className="text-[22px] font-semibold">时间规划</h1>
-          <div className="flex items-center gap-2">
+        <header className="mb-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-[22px] font-semibold">时间规划</h1>
+            <div className="flex items-center gap-2">
+              {homeMode === 'focus' && (
+                <button
+                  type="button"
+                  onClick={() => setEnergyFilter((v) => !v)}
+                  className={`soft-shadow flex h-11 items-center rounded-2xl px-3 text-sm ${
+                    energyFilter ? 'bg-amber-100 text-amber-700' : 'bg-white text-gray-600'
+                  }`}
+                >
+                  {energyFilter ? '☕ 低精力' : '⚡ 全部'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setView({ name: 'settings' })}
+                className="soft-shadow flex h-11 items-center rounded-2xl bg-white px-3 text-sm text-gray-600"
+              >
+                ⚙️
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex rounded-2xl bg-black/5 p-1">
             <button
               type="button"
-              onClick={() => setEnergyFilter((v) => !v)}
-              className={`soft-shadow flex h-11 items-center rounded-2xl px-3 text-sm ${
-                energyFilter ? 'bg-amber-100 text-amber-700' : 'bg-white text-gray-600'
+              onClick={() => setHomeMode('focus')}
+              className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-medium ${
+                homeMode === 'focus' ? 'soft-shadow bg-white text-gray-900' : 'text-gray-500'
               }`}
             >
-              {energyFilter ? '☕ 低精力' : '⚡ 全部'}
+              <Crosshair size={16} />
+              聚焦
             </button>
             <button
               type="button"
-              onClick={() => setView({ name: 'settings' })}
-              className="soft-shadow flex h-11 items-center rounded-2xl bg-white px-3 text-sm text-gray-600"
+              onClick={() => setHomeMode('date')}
+              className={`flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-medium ${
+                homeMode === 'date' ? 'soft-shadow bg-white text-gray-900' : 'text-gray-500'
+              }`}
             >
-              ⚙️
+              <Calendar size={16} />
+              日期
             </button>
           </div>
         </header>
@@ -337,34 +381,58 @@ function App() {
             </div>
           )}
 
-          <FocusView
-            tasks={normalTasks}
-            preferLowEnergy={energyFilter}
-            onOpenTask={openTask}
-          />
+          {homeMode === 'focus' ? (
+            <>
+              <FocusView
+                tasks={normalTasks}
+                preferLowEnergy={energyFilter}
+                onOpenTask={openTask}
+              />
 
-          {visibleTasks.length > 0 && (
-            <section>
-              <button
-                type="button"
-                onClick={() => setShowAll((v) => !v)}
-                className="soft-shadow flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm text-gray-600"
-              >
-                <span>全部任务（{visibleTasks.length}）</span>
-                <span className="text-xs text-gray-400">{showAll ? '收起 ▲' : '展开 ▼'}</span>
-              </button>
-              {showAll && (
-                <div className="mt-3">
-                  <TaskList
-                    tasks={visibleTasks}
-                    onOpenTask={openTask}
-                    onPostpone15={postpone15}
-                    onTomorrow={postponeTomorrow}
-                    onResplit={resplit}
-                  />
-                </div>
+              {visibleTasks.length > 0 && (
+                <section>
+                  <button
+                    type="button"
+                    onClick={() => setShowAll((v) => !v)}
+                    className="soft-shadow flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm text-gray-600"
+                  >
+                    <span>全部任务（{visibleTasks.length}）</span>
+                    <span className="text-xs text-gray-400">
+                      {showAll ? '收起 ▲' : '展开 ▼'}
+                    </span>
+                  </button>
+                  {showAll && (
+                    <div className="mt-3">
+                      <TaskList
+                        tasks={visibleTasks}
+                        onOpenTask={openTask}
+                        onPostpone15={postpone15}
+                        onTomorrow={postponeTomorrow}
+                        onResplit={resplit}
+                      />
+                    </div>
+                  )}
+                </section>
               )}
-            </section>
+            </>
+          ) : (
+            <>
+              <DateStrip
+                days={days}
+                selected={selectedDate}
+                isTodaySelected={isTodaySelected}
+                loadFor={(date) => loadDotsForDate(tasks, date)}
+                onSelect={setSelectedDate}
+                onBackToToday={() => setSelectedDate(todayISO())}
+              />
+              <DayView
+                tasks={dayTasks}
+                onOpenTask={openTask}
+                onPostpone15={postpone15}
+                onTomorrow={postponeTomorrow}
+                onResplit={resplit}
+              />
+            </>
           )}
 
           {brainDumpTasks.length > 0 && (
