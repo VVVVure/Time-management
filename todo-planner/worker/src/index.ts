@@ -5,13 +5,19 @@ export interface Env {
   ANTHROPIC_API_KEY: string;
   /** 调用 Claude 的模型名，例如 claude-3-5-haiku-latest */
   MODEL: string;
+  /** OpenAI API key（secret，用于语音转文字，绝不返回给前端） */
+  OPENAI_API_KEY: string;
+  /** 语音转文字模型名，例如 whisper-1 */
+  TRANSCRIBE_MODEL: string;
   /** 允许的前端域名，逗号分隔；本地开发允许 localhost */
   ALLOWED_ORIGIN?: string;
 }
 
 const CLAUDE_URL = 'https://api.anthropic.com/v1/messages';
+const OPENAI_TRANSCRIBE_URL = 'https://api.openai.com/v1/audio/transcriptions';
 const ANTHROPIC_VERSION = '2023-06-01';
 const MAX_INPUT_LENGTH = 2000;
+const MAX_AUDIO_SIZE = 15 * 1024 * 1024; // 15MB
 
 const SYSTEM_PROMPT = `你是一个时间规划助手，负责把用户输入整理成任务和可执行的小步骤。
 
@@ -344,6 +350,54 @@ async function handleRefine(request: Request, env: Env): Promise<Response> {
   return json({ steps }, 200, cors);
 }
 
+async function handleTranscribe(request: Request, env: Env): Promise<Response> {
+  const cors = corsHeaders(request, env);
+
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return errorJson('BAD_REQUEST', '请求必须是 multipart/form-data', 400, cors);
+  }
+
+  const file = form.get('file');
+  if (!(file instanceof File)) {
+    return errorJson('BAD_REQUEST', '缺少音频文件（file 字段）', 400, cors);
+  }
+  if (file.size === 0) {
+    return errorJson('BAD_REQUEST', '音频文件为空，请重新录制', 400, cors);
+  }
+  if (file.size > MAX_AUDIO_SIZE) {
+    return errorJson('FILE_TOO_LARGE', '音频文件超过 15MB，请录短一点', 400, cors);
+  }
+
+  const upstream = new FormData();
+  upstream.append('file', file, file.name || 'recording.webm');
+  upstream.append('model', env.TRANSCRIBE_MODEL || 'whisper-1');
+
+  const res = await fetch(OPENAI_TRANSCRIBE_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+    },
+    body: upstream,
+  });
+
+  if (!res.ok) {
+    // 不把上游原始报错细节透露给前端，只打到 Worker 日志里用于排障
+    const status = res.status;
+    const body = await res.text();
+    console.error(`[upstream] OpenAI HTTP ${status}: ${body}`);
+    throw new Error('UPSTREAM_ERROR');
+  }
+
+  const data = (await res.json()) as { text?: unknown };
+  if (typeof data.text !== 'string') {
+    return errorJson('AI_FORMAT_ERROR', '转写结果格式不对，请稍后再试', 502, cors);
+  }
+  return json({ text: data.text }, 200, cors);
+}
+
 async function handleRequest(request: Request, env: Env): Promise<Response> {
   const cors = corsHeaders(request, env);
 
@@ -362,6 +416,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   try {
     if (url.pathname === '/decompose') return await handleDecompose(request, env);
     if (url.pathname === '/refine') return await handleRefine(request, env);
+    if (url.pathname === '/transcribe') return await handleTranscribe(request, env);
     return errorJson('NOT_FOUND', '接口不存在', 404, cors);
   } catch (err) {
     const message = err instanceof Error ? err.message : '';

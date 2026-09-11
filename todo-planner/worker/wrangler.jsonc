@@ -7,6 +7,9 @@
     // 拆解用速度快的模型，具体模型名以官方文档为准：
     // https://docs.claude.com/en/api/overview
     "MODEL": "claude-haiku-4-5-20251001",
+    // 语音转文字模型，具体模型名以 OpenAI 官方文档为准：
+    // https://platform.openai.com/docs/api-reference/audio/createTranscription
+    "TRANSCRIBE_MODEL": "whisper-1",
     // 部署后改成 Pages 的域名，例如 https://todo-planner.pages.dev
     // 本地开发会自动允许 localhost，无需改这里
     "ALLOWED_ORIGIN": "https://time-management-2t5.pages.dev"
