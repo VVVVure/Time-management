@@ -1,4 +1,4 @@
-import { db, getSettings, SETTINGS_ID } from './db';
+import { db, getSettings, listTasks, SETTINGS_ID } from './db';
 import type { Priority, Settings, Step, Task, TaskStatus } from './types';
 
 const BACKUP_VERSION = 1;
@@ -77,7 +77,8 @@ function formatLocalDate(d: Date): string {
 
 /** 导出所有任务和设置为 JSON 字符串，文件名带当天日期 */
 export async function exportData(): Promise<{ filename: string; content: string }> {
-  const tasks = await db.tasks.toArray();
+  // 用 listTasks() 而不是原始 db.tasks.toArray()，确保导出的是已补齐新字段的完整任务
+  const tasks = await listTasks();
   const settings = await getSettings();
   const backup: BackupData = {
     version: BACKUP_VERSION,
@@ -131,9 +132,19 @@ export async function importData(file: File): Promise<void> {
 
   const backup = validateBackup(parsed);
 
+  // 旧备份可能缺少后来新增的字段，导入时统一补齐，避免脏数据进入数据库
+  const normalizedTasks: Task[] = backup.tasks.map((t) => ({
+    ...t,
+    time: t.time ?? null,
+    isBrainDump: t.isBrainDump ?? false,
+    recurrence: t.recurrence ?? null,
+    recurrenceRootId: t.recurrenceRootId ?? null,
+    steps: t.steps.map((s) => ({ ...s, energy: s.energy ?? null })),
+  }));
+
   await db.transaction('rw', db.tasks, db.settings, async () => {
     await db.tasks.clear();
-    await db.tasks.bulkPut(backup.tasks);
+    await db.tasks.bulkPut(normalizedTasks);
     await db.settings.clear();
     await db.settings.put({ ...backup.settings, id: SETTINGS_ID });
   });
