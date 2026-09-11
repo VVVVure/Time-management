@@ -6,6 +6,7 @@ export interface PreviewStep {
   key: string;
   title: string;
   estimatedMinutes: number;
+  energy: 'high' | 'low' | null;
 }
 
 export interface PreviewTask {
@@ -41,6 +42,7 @@ function toPreview(tasks: DecomposeTask[]): PreviewTask[] {
       key: crypto.randomUUID(),
       title: s.title,
       estimatedMinutes: s.estimatedMinutes,
+      energy: s.energy ?? null,
     })),
   }));
 }
@@ -83,7 +85,7 @@ function DecomposePreview({ rawInput, tasks, onConfirm, onCancel }: Props) {
               ...t,
               steps: [
                 ...t.steps,
-                { key: crypto.randomUUID(), title: '', estimatedMinutes: 25 },
+                { key: crypto.randomUUID(), title: '', estimatedMinutes: 25, energy: null },
               ],
             },
       ),

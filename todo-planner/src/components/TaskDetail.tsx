@@ -486,6 +486,8 @@ function StepItem({ step, icon: Icon, first, last, onToggle, onSave, onDelete, o
           </span>
           <span className="mt-0.5 block text-xs text-gray-400">
             {formatMinutes(step.estimatedMinutes)}
+            {step.energy === 'high' && <span className="ml-1">⚡</span>}
+            {step.energy === 'low' && <span className="ml-1">☕</span>}
           </span>
         </button>
       )}

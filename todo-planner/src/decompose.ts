@@ -3,6 +3,7 @@ import { z } from 'zod';
 const stepSchema = z.object({
   title: z.string().min(1),
   estimatedMinutes: z.number().int().positive(),
+  energy: z.enum(['high', 'low']).nullable(),
 });
 
 const taskSchema = z.object({

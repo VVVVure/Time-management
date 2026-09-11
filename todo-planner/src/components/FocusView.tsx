@@ -6,6 +6,7 @@ import ProgressRing from './ProgressRing';
 interface Props {
   tasks: Task[];
   onOpenTask: (taskId: string) => void;
+  preferLowEnergy?: boolean;
 }
 
 const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
@@ -21,7 +22,7 @@ function focusSort(tasks: Task[]): Task[] {
   });
 }
 
-function FocusView({ tasks, onOpenTask }: Props) {
+function FocusView({ tasks, onOpenTask, preferLowEnergy = false }: Props) {
   const active = tasks.filter((t) => t.status !== 'done');
 
   if (active.length === 0) {
@@ -36,11 +37,20 @@ function FocusView({ tasks, onOpenTask }: Props) {
     );
   }
 
-  const ordered = focusSort(active);
+  let pool = active;
+  if (preferLowEnergy) {
+    const low = active.filter((t) => t.steps.some((s) => !s.done && s.energy === 'low'));
+    if (low.length > 0) pool = low;
+  }
+
+  const ordered = focusSort(pool);
   const withStep = ordered.find((t) => t.steps.some((s) => !s.done));
   const focusTask = withStep ?? ordered[0];
 
-  const currentStep = focusTask.steps.find((s) => !s.done);
+  const currentStep = preferLowEnergy
+    ? focusTask.steps.find((s) => !s.done && s.energy === 'low') ??
+      focusTask.steps.find((s) => !s.done)
+    : focusTask.steps.find((s) => !s.done);
   const nextStep = currentStep
     ? focusTask.steps.find((s) => !s.done && s.order > currentStep.order)
     : undefined;

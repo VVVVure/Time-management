@@ -11,6 +11,7 @@ export interface Task {
   priority: Priority;
   status: TaskStatus;         // 有步骤被勾选 → doing；全部完成 → done
   steps: Step[];
+  isBrainDump: boolean;       // 是否是杂物箱里的随手记（AI 拆解出来的任务都是 false）
   createdAt: string;          // ISO 时间
   updatedAt: string;
 }
@@ -23,6 +24,7 @@ export interface Step {
   done: boolean;
   doneAt: string | null;
   order: number;              // 排序，从 0 开始
+  energy: 'high' | 'low' | null; // 精力消耗：high=深度思考/创造，low=机械/体力，null=未判断
 }
 
 /** 设置（存在本地） */

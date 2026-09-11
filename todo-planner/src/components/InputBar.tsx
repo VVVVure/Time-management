@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Loader2, Mic } from 'lucide-react';
+import { Inbox, Loader2, Mic } from 'lucide-react';
 import { useState } from 'react';
 import { getSettings } from '../db';
 import { useKeyboardInset } from '../useKeyboardInset';
@@ -7,10 +7,11 @@ import { useVoiceRecorder } from '../useVoiceRecorder';
 
 interface Props {
   onSend: (text: string) => Promise<void>;
+  onBrainDump?: (text: string) => void;
   disabled?: boolean;
 }
 
-function InputBar({ onSend, disabled = false }: Props) {
+function InputBar({ onSend, onBrainDump, disabled = false }: Props) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const keyboardInset = useKeyboardInset();
@@ -29,6 +30,13 @@ function InputBar({ onSend, disabled = false }: Props) {
     setSending(true);
     setText('');
     onSend(value).finally(() => setSending(false));
+  };
+
+  const handleBrainDump = () => {
+    const value = text.trim();
+    if (!value || sending || disabled) return;
+    setText('');
+    onBrainDump?.(value);
   };
 
   const handleMicDown = (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -73,6 +81,16 @@ function InputBar({ onSend, disabled = false }: Props) {
             className="min-h-[44px] flex-1 resize-none rounded-xl bg-gray-100 px-3 py-2.5 text-base leading-snug text-gray-900 outline-none placeholder:text-gray-400 disabled:opacity-60"
             style={{ fontSize: 16 }}
           />
+
+          <button
+            type="button"
+            onClick={handleBrainDump}
+            disabled={!text.trim() || sending || disabled}
+            aria-label="存进杂物箱"
+            className="h-11 shrink-0 rounded-xl bg-gray-100 px-3 text-gray-600 transition disabled:opacity-40"
+          >
+            <Inbox size={18} />
+          </button>
 
           <motion.button
             type="button"

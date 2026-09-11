@@ -47,11 +47,16 @@ export function computeStatus(steps: Step[]): TaskStatus {
   return 'doing';
 }
 
-/** 列出所有任务（按创建时间从旧到新），并补齐旧数据里可能缺失的 time 字段 */
+/** 列出所有任务（按创建时间从旧到新），并补齐旧数据里可能缺失的字段 */
 export async function listTasks(): Promise<Task[]> {
   const tasks = await db.tasks.toArray();
   return tasks
-    .map((t) => ({ ...t, time: t.time ?? null }))
+    .map((t) => ({
+      ...t,
+      time: t.time ?? null,
+      isBrainDump: t.isBrainDump ?? false,
+      steps: t.steps.map((s) => ({ ...s, energy: s.energy ?? null })),
+    }))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
@@ -91,6 +96,7 @@ export async function addStep(
     done: false,
     doneAt: null,
     order: task.steps.length,
+    energy: null,
   };
 
   const steps = [...task.steps, step];

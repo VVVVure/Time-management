@@ -28,6 +28,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     priority: 'medium',
     status: 'todo',
     steps: [],
+    isBrainDump: false,
     createdAt: '2026-09-11T00:00:00.000Z',
     updatedAt: '2026-09-11T00:00:00.000Z',
     ...overrides,
@@ -42,6 +43,7 @@ function makeStep(id: string, done = false, order = 0): Step {
     done,
     doneAt: done ? '2026-09-11T00:00:00.000Z' : null,
     order,
+    energy: null,
   };
 }
 

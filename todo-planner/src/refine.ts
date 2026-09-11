@@ -33,6 +33,7 @@ export async function resplitStep(task: Task): Promise<void> {
     done: false,
     doneAt: null,
     order: 0,
+    energy: s.energy ?? null,
   }));
 
   const index = task.steps.findIndex((s) => s.id === target.id);
