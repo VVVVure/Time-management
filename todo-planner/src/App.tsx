@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import InputBar from './components/InputBar';
+import TaskDetail from './components/TaskDetail';
 import TaskList from './components/TaskList';
 import { addTasks, listTasks } from './db';
 import type { Task } from './types';
@@ -46,18 +47,22 @@ function App() {
 
   if (view.name === 'detail') {
     const task = tasks.find((t) => t.id === view.taskId);
+    if (!task) {
+      return (
+        <div className="safe-top safe-bottom mx-auto flex min-h-full max-w-md flex-col px-4 py-4">
+          <button type="button" onClick={() => setView({ name: 'home' })} className="self-start text-blue-600">
+            ‹ 返回
+          </button>
+          <p className="mt-8 text-center text-gray-500">任务不存在</p>
+        </div>
+      );
+    }
     return (
-      <div className="safe-top safe-bottom mx-auto flex min-h-full max-w-md flex-col px-4 py-4">
-        <button
-          type="button"
-          onClick={() => setView({ name: 'home' })}
-          className="self-start text-blue-600"
-        >
-          ‹ 返回
-        </button>
-        <h1 className="mt-4 text-xl font-semibold">{task?.title ?? '任务不存在'}</h1>
-        {/* T2.3 会在这里实现完整的步骤管理 */}
-      </div>
+      <TaskDetail
+        task={task}
+        onBack={() => setView({ name: 'home' })}
+        onChanged={refresh}
+      />
     );
   }
 
