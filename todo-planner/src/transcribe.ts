@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { workerFetch } from './workerClient';
 
 const transcribeResponseSchema = z.object({
   text: z.string(),
@@ -15,8 +16,6 @@ export type TranscribeErrorKind =
 export type TranscribeOutcome =
   | { kind: 'ok'; text: string }
   | { kind: 'error'; errorKind: TranscribeErrorKind; message: string };
-
-const TIMEOUT_MS = 20_000;
 
 /** 上传音频到 Worker 的 /transcribe 接口，返回统一结果，不抛异常 */
 export async function callTranscribe(audio: Blob, password: string): Promise<TranscribeOutcome> {
@@ -40,63 +39,19 @@ export async function callTranscribe(audio: Blob, password: string): Promise<Tra
   const extension = audio.type === 'audio/mp4' ? 'm4a' : 'webm';
   form.append('file', audio, `recording.${extension}`);
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const outcome = await workerFetch('/transcribe', {
+    password,
+    form,
+    timeoutMessage: '转写超时（超过 20 秒），请重试',
+    parseFailMessage: '转写服务返回异常，请重试',
+    serverFallbackMessage: '转写服务暂时不可用，请稍后再试',
+  });
 
-  let res: Response;
-  try {
-    res = await fetch(`${workerUrl}/transcribe`, {
-      method: 'POST',
-      headers: { 'X-App-Password': password },
-      body: form,
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    if ((err as { name?: string })?.name === 'AbortError') {
-      return {
-        kind: 'error',
-        errorKind: 'timeout',
-        message: '转写超时（超过 20 秒），请重试',
-      };
-    }
-    return {
-      kind: 'error',
-      errorKind: 'network',
-      message: '网络不可用，请检查网络连接后重试',
-    };
-  }
-  clearTimeout(timer);
-
-  if (res.status === 401) {
-    return {
-      kind: 'error',
-      errorKind: 'unauthorized',
-      message: '密码错误，请到设置页检查 App 密码',
-    };
+  if (outcome.kind === 'error') {
+    return { kind: 'error', errorKind: outcome.errorKind, message: outcome.message };
   }
 
-  let data: unknown;
-  try {
-    data = await res.json();
-  } catch {
-    return {
-      kind: 'error',
-      errorKind: 'format',
-      message: '转写服务返回异常，请重试',
-    };
-  }
-
-  if (!res.ok) {
-    const message = (data as { error?: { message?: string } })?.error?.message;
-    return {
-      kind: 'error',
-      errorKind: 'server',
-      message: message ?? '转写服务暂时不可用，请稍后再试',
-    };
-  }
-
-  const parsed = transcribeResponseSchema.safeParse(data);
+  const parsed = transcribeResponseSchema.safeParse(outcome.data);
   if (!parsed.success) {
     return {
       kind: 'error',
