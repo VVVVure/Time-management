@@ -69,6 +69,33 @@ export function formatDeadline(deadline: string): { text: string; overdue: boole
   return { text: `剩余 ${diff} 天`, overdue: false };
 }
 
+/** 把截止日期和具体时间点合成一行显示文案，各组件复用 */
+export function formatSchedule(
+  deadline: string | null,
+  time: string | null,
+): { text: string; overdue: boolean } | null {
+  if (!deadline && !time) return null;
+  if (!deadline) return { text: time ?? '', overdue: false };
+
+  const diff = daysUntil(deadline);
+  const overdue = diff < 0;
+  let dateText: string;
+  if (diff === 0) {
+    dateText = '今天';
+  } else if (diff === 1) {
+    dateText = '明天';
+  } else if (diff === -1) {
+    dateText = '昨天';
+  } else if (diff < -1) {
+    dateText = `已过期 ${Math.abs(diff)} 天`;
+  } else {
+    const [, m, d] = deadline.split('-').map(Number);
+    dateText = `${m}月${d}日`;
+  }
+
+  return { text: time ? `${dateText} ${time}` : dateText, overdue };
+}
+
 /** 已完成步骤数 */
 export function doneStepCount(steps: Step[]): number {
   return steps.filter((s) => s.done).length;

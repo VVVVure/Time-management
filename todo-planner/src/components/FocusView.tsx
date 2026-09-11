@@ -1,6 +1,6 @@
 import { categoryFor } from '../categories';
 import type { Priority, Task } from '../types';
-import { doneStepCount, formatMinutes, remainingMinutes } from '../utils';
+import { doneStepCount, formatMinutes, formatSchedule, remainingMinutes } from '../utils';
 import ProgressRing from './ProgressRing';
 
 interface Props {
@@ -50,6 +50,7 @@ function FocusView({ tasks, onOpenTask }: Props) {
   const progress = total === 0 ? 0 : done / total;
   const remaining = remainingMinutes(focusTask.steps);
 
+  const schedule = formatSchedule(focusTask.deadline, focusTask.time);
   const category = categoryFor(focusTask.title);
   const Icon = category.icon;
 
@@ -64,6 +65,12 @@ function FocusView({ tasks, onOpenTask }: Props) {
         <Icon size={16} />
         <span className="truncate">{focusTask.title}</span>
       </div>
+
+      {schedule && (
+        <p className={`mt-1 text-[13px] ${schedule.overdue ? 'text-amber-600' : 'text-gray-400'}`}>
+          📅 {schedule.text}
+        </p>
+      )}
 
       <div className="mt-4 flex flex-col items-center text-center">
         <ProgressRing progress={progress} size={132} strokeWidth={9}>

@@ -122,6 +122,7 @@ function App() {
         title: text,
         rawInput: text,
         deadline: null,
+        time: null,
         priority: 'medium',
         status: 'todo',
         steps: [],
@@ -141,6 +142,7 @@ function App() {
       title: pt.title,
       rawInput: flow.text,
       deadline: pt.deadline || null,
+      time: pt.time || null,
       priority: pt.priority,
       status: 'todo',
       steps: pt.steps.map((s, i) => ({

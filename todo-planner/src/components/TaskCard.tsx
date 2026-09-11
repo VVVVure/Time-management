@@ -1,6 +1,6 @@
 import { categoryFor } from '../categories';
 import type { Task } from '../types';
-import { doneStepCount, formatDeadline, formatMinutes, remainingMinutes } from '../utils';
+import { doneStepCount, formatMinutes, formatSchedule, remainingMinutes } from '../utils';
 
 interface Props {
   task: Task;
@@ -15,10 +15,10 @@ function TaskCard({ task, onClick, onPostpone15, onTomorrow, onResplit }: Props)
   const done = doneStepCount(task.steps);
   const progress = total === 0 ? 0 : Math.round((done / total) * 100);
   const remaining = remainingMinutes(task.steps);
-  const deadline = task.deadline ? formatDeadline(task.deadline) : null;
+  const schedule = formatSchedule(task.deadline, task.time);
   const category = categoryFor(task.title);
   const Icon = category.icon;
-  const overdue = deadline?.overdue ?? false;
+  const overdue = schedule?.overdue ?? false;
 
   const open = () => onClick(task.id);
 
@@ -46,13 +46,13 @@ function TaskCard({ task, onClick, onPostpone15, onTomorrow, onResplit }: Props)
         <h2 className="min-w-0 flex-1 text-[17px] font-semibold leading-snug text-gray-900">
           {task.title}
         </h2>
-        {deadline && (
+        {schedule && (
           <span
             className={`shrink-0 text-[13px] ${
               overdue ? 'font-medium text-amber-600' : 'text-gray-400'
             }`}
           >
-            {deadline.text}
+            {schedule.text}
           </span>
         )}
       </div>

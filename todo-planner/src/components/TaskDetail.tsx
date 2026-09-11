@@ -14,9 +14,9 @@ import {
 import { resplitStep } from '../refine';
 import type { Priority, Step, Task } from '../types';
 import {
-  daysUntil,
   doneStepCount,
   formatMinutes,
+  formatSchedule,
   postpone15Deadline,
   remainingMinutes,
   tomorrowISO,
@@ -55,7 +55,8 @@ function TaskDetail({ task, onBack, onChanged }: Props) {
   const total = task.steps.reduce((sum, s) => sum + s.estimatedMinutes, 0);
   const remaining = remainingMinutes(task.steps);
   const done = doneStepCount(task.steps);
-  const overdue = task.deadline ? daysUntil(task.deadline) < 0 : false;
+  const schedule = formatSchedule(task.deadline, task.time);
+  const overdue = schedule?.overdue ?? false;
   const category = categoryFor(task.title);
   const Icon = category.icon;
 
@@ -203,9 +204,7 @@ function TaskDetail({ task, onBack, onChanged }: Props) {
               overdue ? 'bg-amber-50 text-amber-700' : 'bg-white text-gray-700'
             }`}
           >
-            {task.deadline
-              ? `📅 ${task.deadline}${overdue ? ' · 已过期' : ''}`
-              : '📅 添加截止日期'}
+            {schedule ? `📅 ${schedule.text}` : '📅 添加截止日期'}
           </button>
         )}
 

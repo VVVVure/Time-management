@@ -12,6 +12,7 @@ export interface PreviewTask {
   key: string;
   title: string;
   deadline: string;
+  time: string;
   priority: Priority;
   steps: PreviewStep[];
 }
@@ -34,6 +35,7 @@ function toPreview(tasks: DecomposeTask[]): PreviewTask[] {
     key: crypto.randomUUID(),
     title: t.title,
     deadline: t.deadline ?? '',
+    time: t.time ?? '',
     priority: t.priority,
     steps: t.steps.map((s) => ({
       key: crypto.randomUUID(),
@@ -159,6 +161,12 @@ function DecomposePreview({ rawInput, tasks, onConfirm, onCancel }: Props) {
                   type="date"
                   value={task.deadline}
                   onChange={(e) => patchTask(task.key, { deadline: e.target.value })}
+                  className="rounded-lg bg-gray-100 px-2 py-1.5 text-sm outline-none"
+                />
+                <input
+                  type="time"
+                  value={task.time}
+                  onChange={(e) => patchTask(task.key, { time: e.target.value })}
                   className="rounded-lg bg-gray-100 px-2 py-1.5 text-sm outline-none"
                 />
                 <div className="flex gap-1">
