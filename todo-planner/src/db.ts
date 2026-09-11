@@ -55,6 +55,8 @@ export async function listTasks(): Promise<Task[]> {
       ...t,
       time: t.time ?? null,
       isBrainDump: t.isBrainDump ?? false,
+      recurrence: t.recurrence ?? null,
+      recurrenceRootId: t.recurrenceRootId ?? null,
       steps: t.steps.map((s) => ({ ...s, energy: s.energy ?? null })),
     }))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -79,6 +81,12 @@ export async function updateTask(task: Task): Promise<void> {
 /** 删除整个任务 */
 export async function deleteTask(taskId: string): Promise<void> {
   await db.tasks.delete(taskId);
+}
+
+/** 批量删除任务 */
+export async function bulkDeleteTasks(taskIds: string[]): Promise<void> {
+  if (taskIds.length === 0) return;
+  await db.tasks.bulkDelete(taskIds);
 }
 
 /** 给任务添加一个步骤，返回新建的步骤 */

@@ -29,6 +29,8 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     status: 'todo',
     steps: [],
     isBrainDump: false,
+    recurrence: null,
+    recurrenceRootId: null,
     createdAt: '2026-09-11T00:00:00.000Z',
     updatedAt: '2026-09-11T00:00:00.000Z',
     ...overrides,
