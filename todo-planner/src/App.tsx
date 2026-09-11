@@ -1,65 +1,55 @@
-import { useCallback, useEffect, useState } from 'react';
-import { addTasks, listTasks } from './db';
+import { useEffect, useState } from 'react';
+import TaskList from './components/TaskList';
+import { listTasks } from './db';
 import type { Task } from './types';
 
-/**
- * T1.2 临时验收页面：点击按钮写入一条测试任务，刷新页面后数据仍在。
- * 该页面会在 T2.1 被真正的任务列表替换。
- */
+type View = { name: 'home' } | { name: 'detail'; taskId: string };
+
 function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const refresh = useCallback(async () => {
-    setTasks(await listTasks());
-  }, []);
+  const [view, setView] = useState<View>({ name: 'home' });
 
   useEffect(() => {
-    refresh().finally(() => setLoading(false));
-  }, [refresh]);
+    let cancelled = false;
+    listTasks().then((t) => {
+      if (!cancelled) setTasks(t);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const handleAddTest = async () => {
-    const now = new Date().toISOString();
-    await addTasks([
-      {
-        id: crypto.randomUUID(),
-        title: `测试任务 ${new Date().toLocaleTimeString()}`,
-        rawInput: '临时测试数据',
-        deadline: null,
-        priority: 'medium',
-        status: 'todo',
-        steps: [],
-        createdAt: now,
-        updatedAt: now,
-      },
-    ]);
-    await refresh();
-  };
+  const openTask = (taskId: string) => setView({ name: 'detail', taskId });
+
+  if (view.name === 'detail') {
+    const task = tasks.find((t) => t.id === view.taskId);
+    return (
+      <div className="safe-top safe-bottom mx-auto flex min-h-full max-w-md flex-col px-4 py-4">
+        <button
+          type="button"
+          onClick={() => setView({ name: 'home' })}
+          className="self-start text-blue-600"
+        >
+          ‹ 返回
+        </button>
+        <h1 className="mt-4 text-xl font-semibold">{task?.title ?? '任务不存在'}</h1>
+        {/* T2.3 会在这里实现完整的步骤管理 */}
+      </div>
+    );
+  }
 
   return (
-    <div className="safe-top safe-bottom mx-auto flex min-h-full max-w-md flex-col gap-4 px-4 py-6">
-      <h1 className="text-2xl font-semibold">时间规划（数据层验收）</h1>
-      <button
-        type="button"
-        onClick={handleAddTest}
-        className="rounded-xl bg-blue-600 px-4 py-3 text-white active:opacity-80"
-      >
-        写入测试数据
-      </button>
-      {loading ? (
-        <p className="text-gray-500">加载中…</p>
-      ) : tasks.length === 0 ? (
-        <p className="text-gray-500">还没有任务，点击上面的按钮写入一条。</p>
-      ) : (
-        <ul className="space-y-2">
-          {tasks.map((t) => (
-            <li key={t.id} className="rounded-xl bg-white p-3 shadow-sm">
-              <p className="font-medium">{t.title}</p>
-              <p className="text-sm text-gray-500">{t.createdAt}</p>
-            </li>
-          ))}
-        </ul>
-      )}
+    <div className="safe-top safe-bottom mx-auto flex min-h-full max-w-md flex-col px-4 pb-4 pt-4">
+      <header className="mb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold">时间规划</h1>
+        {/* T2.4 会在这里加入设置入口 */}
+      </header>
+
+      <main className="flex-1">
+        <TaskList tasks={tasks} onOpenTask={openTask} />
+      </main>
+
+      {/* T2.2 会在这里加入底部输入栏 */}
     </div>
   );
 }
