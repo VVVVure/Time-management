@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import DecomposePreview, { type PreviewTask } from './components/DecomposePreview';
+import FocusView from './components/FocusView';
 import InputBar from './components/InputBar';
 import SettingsPage from './components/SettingsPage';
 import TaskDetail from './components/TaskDetail';
 import TaskList from './components/TaskList';
-import { addTasks, getSettings, listTasks } from './db';
+import { addTasks, getSettings, listTasks, updateTask } from './db';
 import { callDecompose, type DecomposeErrorKind, type DecomposeTask } from './decompose';
+import { resplitStep } from './refine';
 import type { Task } from './types';
-import { todayISO, weekdayCN } from './utils';
+import { postpone15Deadline, todayISO, tomorrowISO, weekdayCN } from './utils';
 
 type View =
   | { name: 'home' }
@@ -29,6 +31,7 @@ function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [view, setView] = useState<View>({ name: 'home' });
   const [flow, setFlow] = useState<DecomposeFlow | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   const refresh = useCallback(async () => {
     setTasks(await listTasks());
@@ -45,6 +48,31 @@ function App() {
   }, []);
 
   const openTask = (taskId: string) => setView({ name: 'detail', taskId });
+
+  const postpone15 = async (taskId: string) => {
+    const t = tasks.find((x) => x.id === taskId);
+    if (!t) return;
+    await updateTask({ ...t, deadline: postpone15Deadline() });
+    await refresh();
+  };
+
+  const postponeTomorrow = async (taskId: string) => {
+    const t = tasks.find((x) => x.id === taskId);
+    if (!t) return;
+    await updateTask({ ...t, deadline: tomorrowISO() });
+    await refresh();
+  };
+
+  const resplit = async (taskId: string) => {
+    const t = tasks.find((x) => x.id === taskId);
+    if (!t) return;
+    try {
+      await resplitStep(t);
+      await refresh();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '重新切碎失败，请稍后再试');
+    }
+  };
 
   const handleSend = async (text: string) => {
     if (flow?.status === 'loading') return;
@@ -171,18 +199,42 @@ function App() {
     content = (
       <div className="safe-top mx-auto flex min-h-full max-w-md flex-col px-4 pb-40 pt-4">
         <header className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold">时间规划</h1>
+          <h1 className="text-[22px] font-semibold">时间规划</h1>
           <button
             type="button"
             onClick={() => setView({ name: 'settings' })}
-            className="rounded-xl bg-white px-3 py-1.5 text-sm text-gray-600 shadow-sm"
+            className="soft-shadow flex h-11 items-center rounded-2xl bg-white px-3 text-sm text-gray-600"
           >
             ⚙️ 设置
           </button>
         </header>
 
-        <main className="flex-1">
-          <TaskList tasks={tasks} onOpenTask={openTask} />
+        <main className="flex-1 space-y-4">
+          <FocusView tasks={tasks} onOpenTask={openTask} />
+
+          {tasks.length > 0 && (
+            <section>
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className="soft-shadow flex w-full items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm text-gray-600"
+              >
+                <span>全部任务（{tasks.length}）</span>
+                <span className="text-xs text-gray-400">{showAll ? '收起 ▲' : '展开 ▼'}</span>
+              </button>
+              {showAll && (
+                <div className="mt-3">
+                  <TaskList
+                    tasks={tasks}
+                    onOpenTask={openTask}
+                    onPostpone15={postpone15}
+                    onTomorrow={postponeTomorrow}
+                    onResplit={resplit}
+                  />
+                </div>
+              )}
+            </section>
+          )}
         </main>
 
         <InputBar onSend={handleSend} disabled={flow !== null} />

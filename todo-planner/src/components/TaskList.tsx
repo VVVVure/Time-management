@@ -6,9 +6,12 @@ import TaskCard from './TaskCard';
 interface Props {
   tasks: Task[];
   onOpenTask: (taskId: string) => void;
+  onPostpone15?: (taskId: string) => void;
+  onTomorrow?: (taskId: string) => void;
+  onResplit?: (taskId: string) => void;
 }
 
-function TaskList({ tasks, onOpenTask }: Props) {
+function TaskList({ tasks, onOpenTask, onPostpone15, onTomorrow, onResplit }: Props) {
   const [showDone, setShowDone] = useState(false);
 
   if (tasks.length === 0) {
@@ -33,7 +36,14 @@ function TaskList({ tasks, onOpenTask }: Props) {
           <h2 className="mb-2 px-1 text-sm font-medium text-gray-500">进行中</h2>
           <div className="space-y-2">
             {active.map((t) => (
-              <TaskCard key={t.id} task={t} onClick={onOpenTask} />
+              <TaskCard
+                key={t.id}
+                task={t}
+                onClick={onOpenTask}
+                onPostpone15={onPostpone15}
+                onTomorrow={onTomorrow}
+                onResplit={onResplit}
+              />
             ))}
           </div>
         </section>
